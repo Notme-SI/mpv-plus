@@ -155,10 +155,10 @@
       "installedHash": "26eeeff0d4ef9b0e0bb0477410c37c73b0132bd42af31aabe6c0f2086b510cb5"
     }
   ],
-  "buildVersion": "1.1.1",
+  "buildVersion": "1.1.0",
   "extensionLayout": 2,
   "localFiles": {
-    "extensions/lampa_context.lua": "3f439b012a3e4b51bd5f4e858d0195207c3e13e4b70cebe7443c648cdefc140f",
+    "extensions/lampa_context.lua": "241ad00e53edeac7ae88a40f87ece64ae35a9937dfb64ce603ccad36ee4cf8fc",
     "extensions/uosc_theme.lua": "3fbb98db1485ce611b601b4b3e8bdcd4e2bf789b5da333990f42d3a713d3916b",
     "extensions/glass_surface.lua": "2e5e076014ea89bf5726c2b0708cc514c95f1ec1c0a9e002029ca9e69b5a42e5",
     "extensions/uosc_skin.lua": "9c9ef7280c4f1894c056de431c6acd502a5cb024a2b4ceca5e1376e224816c6e",
