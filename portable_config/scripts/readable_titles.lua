@@ -91,13 +91,14 @@ local function identity()
         if data.episode then data.kind='tv' end
     end
     local contextual=anime.from_source(raw,source.current())
-    return (contextual.anime or contextual.unresolved_context) and contextual or anime.enrich(raw,data),raw
+    return (contextual.anime or contextual.source_confirmed or contextual.unresolved_context) and contextual or anime.enrich(raw,data),raw
 end
 local function refresh()
     if not active or not opts.enabled then return end
     local data,raw=identity()
     local lang=ui.language()
     local signature=raw..'|'..data.title..'|'..lang..'|'..tostring(data.episode)..'|'..tostring(data.season)..'|'..tostring(data.unresolved_context)
+        ..'|'..tostring(data.tmdb_id)..'|'..tostring(data.mal_id)..'|'..tostring(data.year)..'|'..tostring(data.kind)..'|'..tostring(data.lampa_check)
     if signature==current then return end
     generation=generation+1;cancel()
     current,language=signature,lang

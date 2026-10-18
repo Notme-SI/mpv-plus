@@ -12,7 +12,7 @@ return function(path)
         end
         mp={get_property=function(k,d)if k=='path' then return media end;return d end}
         local data=dofile(path('extensions/lampa_context.lua')).current('02.mkv')
-        assert(data.tmdb_id==85937 and data.tmdb_season==season and data.tmdb_episode==2)
+        assert(data.tmdb_id==85937 and data.tmdb_season==season and data.tmdb_episode==2,utils.format_json(data))
         assert(data.mal_id==expected,'TMDB season '..season..' selected wrong AniSkip anime: '..tostring(data.mal_id))
         assert(data.episode==2,'Do not shift the episode when the arc has no offset')
     end

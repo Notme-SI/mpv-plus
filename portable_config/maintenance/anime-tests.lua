@@ -15,6 +15,10 @@ return function(path)
     local raw='01. Unknown Film 3.mkv'
     assert(anime.enrich(raw,fmt.parse(raw),index).title==fmt.parse(raw).title,'Do not strip unconfirmed titles')
     local demon=anime.index({['Kimetsu no Yaiba']=38000})
+    local numeric=anime.from_source('02.mkv',{},anime.index({['02']=49523}))
+    assert(not numeric.mal_id and numeric.episode==2,'An episode filename must not identify a film named 02')
+    numeric=anime.from_source('02.mkv',{path='C:/Users/User/Downloads/Video/02.mkv'},anime.index({['C']=10163}))
+    assert(not numeric.mal_id,'A Windows drive letter must not identify an anime named C')
     local arcs=anime.index({['Kimetsu no Yaiba']=38000,['Demon Slayer - Kimetsu no Yaiba Entertainment District Arc']=47778,
         ['Kimetsu no Yaiba - Hashira Geiko Hen']=55701})
     for _,case in ipairs({

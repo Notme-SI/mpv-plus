@@ -2,6 +2,7 @@
 local folder=assert(debug.getinfo(1,'S').source:sub(2):match('^(.*)[/\\]'))
 local fmt=dofile(folder..'/title_format.lua')
 local anime=dofile(folder..'/anime_identity.lua')
+local source=dofile(folder..'/media_source.lua')
 local M={}
 local payload
 local function number(value,min,max)
@@ -16,6 +17,12 @@ local function read()
     if payload~=nil then return payload end
     payload={}
     local value=os.getenv('MPV_PLUS_LAMPA_CONTEXT')
+    -- Native Lampa Desktop can pass this directly through its existing spawn
+    -- API. Hex keeps JSON commas and Unicode out of mpv's option grammar.
+    local encoded=mp.get_opt and mp.get_opt('mpv_plus_lampa_context')
+    if type(encoded)=='string' and #encoded<=22000 and #encoded%2==0 and not encoded:find('[^%x]') then
+        value=encoded:gsub('%x%x',function(pair)return string.char(tonumber(pair,16)) end)
+    end
     if not value or #value>30000 then return payload end
     local ok,data=pcall(require('mp.utils').parse_json,value)
     if ok and type(data)=='table' and data.version==1 and data.source=='lampa' and type(data.entries)=='table' then
@@ -23,13 +30,75 @@ local function read()
     end
     return payload
 end
+local function coordinates(data)
+    if data.kind=='tv' then
+        data.tmdb_season=data.tmdb_season or data.season
+        data.tmdb_episode=data.tmdb_episode or (data.episode and data.episode+(data.tmdb_offset or 0))
+    end
+    return data
+end
+-- A card is a scoped hint, never an instruction to replace stronger file data.
+-- This function is shared by the title renderer, TheIntroDB and AniSkip.
+function M.reconcile(independent,card,context)
+    local own=coordinates(copy(independent))
+    if not card then return own end
+    context=context or {}
+    local function keep(reason)
+        own.lampa_check=reason
+        return own
+    end
+    if context.pending then return keep('pending') end
+    local physical=context.path or (not mp.get_property('path',''):find('://',1,true) and mp.get_property('path','') or '')
+    local parsed=fmt.parse(physical)
+    local episode_name=(physical:match('[^/\\]+$') or physical):match('^%d+[%. _%-]')
+    local specific=own.tmdb_id~=nil or own.mal_id~=nil or own.source_confirmed==true
+    local explicit=parsed.season~=nil and not parsed.season_inferred
+    local known_title=own.source_confirmed or physical~='' and not episode_name and #fmt.normalize(parsed.title or '')>3
+        and not (parsed.title or ''):lower():match('^video$')
+        and not (parsed.title or ''):lower():match('^stream$')
+        and not (parsed.title or ''):match('^%x+$')
+    if own.tmdb_id and card.tmdb_id and tonumber(own.tmdb_id)~=tonumber(card.tmdb_id) then return keep('conflict-id') end
+    if own.kind~=card.kind and (specific or explicit or known_title) then return keep('conflict-kind') end
+    if own.mal_id and card.mal_id and tonumber(own.mal_id)~=tonumber(card.mal_id) then return keep('conflict-arc') end
+    if known_title and own.year and card.year and not own.anime and math.abs(own.year-card.year)>1 then return keep('conflict-year') end
+    if (specific or explicit) and own.tmdb_season~=nil and card.tmdb_season~=nil
+        and own.tmdb_season~=card.tmdb_season then return keep('conflict-season') end
+    local physical_episode=parsed.episode or episode_name and tonumber((physical:match('[^/\\]+$') or physical):match('^(%d+)'))
+    if physical_episode then
+        local actual=own.tmdb_season~=nil and own.tmdb_episode or physical_episode
+        local supplied=own.tmdb_season~=nil and card.tmdb_episode or card.episode
+        if actual and supplied and actual~=supplied then return keep('conflict-episode') end
+    end
+    if known_title and not (own.tmdb_id and card.tmdb_id and tonumber(own.tmdb_id)==tonumber(card.tmdb_id)) then
+        local names={card.title,card.original_title or ''}
+        for _,alias in ipairs(card.aliases or {}) do names[#names+1]=alias end
+        local matched=false
+        for _,name in ipairs(names) do
+            if fmt.normalize(fmt.parse(name).title)==fmt.normalize(own.source_confirmed and own.title or parsed.title) then matched=true;break end
+        end
+        if not matched then return keep('conflict-title') end
+    end
+    local result=copy(own)
+    -- Uncertain coordinates from a guessed generic title are replaced only by
+    -- the exact launched card, after the real torrent file has been checked.
+    for _,key in ipairs({'title','original_title','aliases','year','kind','tmdb_id','imdb_id','mal_id','shikimori_id','anime'}) do
+        if card[key]~=nil then result[key]=card[key] end
+    end
+    if not specific and not explicit or own.unresolved_context then
+        for _,key in ipairs({'season','episode','tmdb_season','tmdb_episode','tmdb_offset'}) do result[key]=card[key] or own[key] end
+    end
+    result.unresolved_context=nil
+    result.episode_title=card.episode_title
+    result.source='lampa'
+    result.lampa_check=(specific or explicit or known_title) and 'confirmed' or 'hint'
+    return coordinates(result)
+end
 local function url(value)
     value=value or ''
     -- TorrServer's loader can wrap the same stream in an EDL to attach external tracks.
     if value:match('^edl://') then value=value:match('https?://[^;]+') or value end
     return fmt.decode(value):gsub('&preload$','&play'):gsub('&preload&','&play&')
 end
-local function hash(value) return url(value):match('[?&]link=(%x+)') end
 local function sanitize(value)
     if type(value)~='table' then return end
     local title=text(value.title)
@@ -99,27 +168,22 @@ end
 function M.current(raw)
     local path=mp.get_property('path','')
     if path=='' then return end
-    local matched,fallback
+    local matched
     for _,entry in ipairs(read()) do
         if type(entry)=='table' and type(entry.url)=='string' then
             if url(entry.url)==url(path) then matched=entry;break end
-            local a,b=hash(entry.url),hash(path)
-            if a and b and a:lower()==b:lower() then fallback=entry end
         end
     end
-    local data=sanitize((matched or fallback or {}).identity)
+    -- A shared torrent hash does not identify a file or its season. Metadata
+    -- supplied for a sibling is never reused for the current episode.
+    if not matched then return end
+    local data=sanitize(matched.identity)
     if not data then return end
-    local parsed=fmt.parse(raw or mp.get_property('media-title',''))
-    if not matched then
-        -- A sibling torrent file may be another season. Never carry over the previous episode.
-        data.season,data.episode,data.episode_title=parsed.season,parsed.episode,parsed.episode_title
-        data.mal_id,data.shikimori_id=nil,nil
-    else
-        data.season=data.season or parsed.season
-        data.episode=data.episode or parsed.episode
-    end
     if data.kind=='movie' then data.season,data.episode=nil,nil end
     data.input=path
-    return enrich(copy(data))
+    local hint=enrich(copy(data))
+    local context=mp.get_property_native and source.current() or {}
+    local independent=anime.from_source(raw or mp.get_property('media-title',''),context)
+    return M.reconcile(independent,hint,context)
 end
 return M

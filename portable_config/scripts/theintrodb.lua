@@ -819,6 +819,7 @@ local function auto_detect(file_key, filename)
     end
     local title, year, is_tv, ep_hint = parse_title_for_search(filename)
     local card=manual.current(filename) or lampa.current(filename)
+    if not card and identity.source_confirmed then card=identity end
     if card then
         title=(card.original_title and card.original_title~='') and card.original_title or card.title
         year=card.year and tostring(card.year) or nil;is_tv=card.kind=='tv';ep_hint=card.tmdb_episode or card.episode
@@ -883,7 +884,7 @@ local function on_file_loaded()
     local card=manual.current(filename) or lampa.current(filename)
     if not card then
         local contextual=anime_identity.from_source(filename,source_context.current())
-        if contextual.anime or contextual.unresolved_context then card=contextual end
+        if contextual.anime or contextual.source_confirmed or contextual.unresolved_context then card=contextual end
     end
     if card then
         tmdb_id=card.tmdb_id and tostring(card.tmdb_id) or nil

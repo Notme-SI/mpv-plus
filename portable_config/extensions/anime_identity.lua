@@ -1,6 +1,8 @@
 -- Season-aware anime identity. Never substitute season one for an unknown season.
 local folder=assert(debug.getinfo(1,'S').source:sub(2):match('^(.*)[/\\]'))
 local root=folder..'/..'
+local shared='mpv-plus/anime-identity/'..root:gsub('\\','/')
+if package.loaded[shared] then return package.loaded[shared] end
 local fmt=dofile(folder..'/title_format.lua')
 local M={}
 local cached, catalog
@@ -105,6 +107,13 @@ function M.from_source(raw,context,index)
     local parsed=fmt.parse(raw)
     local result=M.enrich(raw,parsed,index)
     context=context or {}
+    -- Bare episode filenames (02.mkv) also occur as exact titles in anime
+    -- catalogs. A numeric filename alone cannot identify that unrelated film.
+    if (parsed.title or ''):match('^%d%d?%d?$') then
+        result=copy(parsed)
+        result.anime=false;result.episode=tonumber(parsed.title);result.kind='tv'
+        result.season=nil;result.season_inferred=nil
+    end
     local metadata=result.mal_id and M.catalog()[tostring(result.mal_id)]
     if (context.pending or context.unavailable) and result.episode
         and not (metadata and metadata.season and metadata.season>1) then
@@ -116,12 +125,14 @@ function M.from_source(raw,context,index)
     local name=fmt.without_dimensions(fmt.decode(context.path or raw or '')):gsub('^.*[/\\]','')
     local episode,rest=name:match('^(%d%d?%d?%d?)[%.%s_%-]+(.+)$')
     if not episode then episode=name:match('^(%d%d?%d?%d?)%.[mM][kK][vV]$') end
-    local number=result.episode or tonumber(episode)
+    local number=tonumber(episode) or fmt.parse(name).episode or result.episode
     if not number or number<1 or number>1899 then return result end
     local candidates={}
     local parent=(context.path or ''):match('^(.*)[/\\][^/\\]+$')
-    while parent and parent~='' do
-        candidates[#candidates+1]=parent:match('([^/\\]+)$') or parent
+    while parent and parent~='' and #candidates<3 do
+        local name=parent:match('([^/\\]+)$') or parent
+        if name:match('^%a:$') then break end
+        candidates[#candidates+1]=name
         parent=parent:match('^(.*)[/\\][^/\\]+$')
     end
     candidates[#candidates+1]=context.title or ''
@@ -147,8 +158,14 @@ function M.from_source(raw,context,index)
                 end
                 return data
             end
+        elseif data.kind=='tv' and data.season~=nil and not data.season_inferred and data.title~='' then
+            -- Non-anime releases can also put the explicit season in the
+            -- parent folder and only an episode number in the actual file.
+            data.episode=number;data.tmdb_season=data.season;data.tmdb_episode=number;data.source_confirmed=true
+            return data
         end
     end
     return result
 end
+package.loaded[shared]=M
 return M
