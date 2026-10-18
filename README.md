@@ -5,15 +5,15 @@
 ## Скачать и запустить
 
 <!-- release-downloads:start -->
-**Актуальная версия: [1.1.0](https://github.com/Notme-SI/mpv-plus/releases/tag/v1.1.0) · Windows 10/11 x64**
+**Актуальная версия: [1.1.1](https://github.com/Notme-SI/mpv-plus/releases/tag/v1.1.1) · Windows 10/11 x64**
 
 | Система | Установщик | Портативная версия |
 | --- | --- | --- |
-| Windows 10/11 x64 | [![Setup x64](https://img.shields.io/badge/Windows-Setup_x64-0078D4?style=flat-square)](https://github.com/Notme-SI/mpv-plus/releases/download/v1.1.0/mpv%2B-1.1.0-Setup.exe) | [![Portable x64](https://img.shields.io/badge/Windows-Portable_x64-2496ED?style=flat-square)](https://github.com/Notme-SI/mpv-plus/releases/download/v1.1.0/mpv%2B-1.1.0.zip) |
+| Windows 10/11 x64 | [![Setup x64](https://img.shields.io/badge/Windows-Setup_x64-0078D4?style=flat-square)](https://github.com/Notme-SI/mpv-plus/releases/download/v1.1.1/mpv%2B-1.1.1-Setup.exe) | [![Portable x64](https://img.shields.io/badge/Windows-Portable_x64-2496ED?style=flat-square)](https://github.com/Notme-SI/mpv-plus/releases/download/v1.1.1/mpv%2B-1.1.1.zip) |
 
 Установщик — установка с выбором папки и созданием ярлыков. Портативная версия — запуск из распакованной папки.
 
-[Все выпуски](https://github.com/Notme-SI/mpv-plus/releases) · [Изменения](https://github.com/Notme-SI/mpv-plus/releases/tag/v1.1.0) · [Контрольные суммы](releases/1.1.0/SHA256SUMS.txt)
+[Все выпуски](https://github.com/Notme-SI/mpv-plus/releases) · [Изменения](https://github.com/Notme-SI/mpv-plus/releases/tag/v1.1.1) · [Контрольные суммы](releases/1.1.1/SHA256SUMS.txt)
 <!-- release-downloads:end -->
 
 1. Скачайте **Setup** и установите плеер. Либо распакуйте **Portable** целиком.
