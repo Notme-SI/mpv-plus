@@ -37,6 +37,21 @@ local function coordinates(data)
     end
     return data
 end
+local function physical_path(context)
+    if context.path then return context.path end
+    local path=mp.get_property('path','')
+    if not path:find('://',1,true) then return path end
+    -- A direct named video URL is independent evidence too. Manifest names,
+    -- opaque endpoints and TorrServer's /stream are not movie titles.
+    local name=path:match('^https?://[^/]+/([^?#]+)')
+    name=name and fmt.decode(name):match('([^/]+)$')
+    if not name or not name:lower():match('%.mkv$') and not name:lower():match('%.mp4$')
+        and not name:lower():match('%.avi$') and not name:lower():match('%.mov$') then return '' end
+    local parsed=fmt.parse(name)
+    local title=fmt.normalize(parsed.title or '')
+    if #title<4 or title=='video' or title=='stream' or title=='file' or title:match('^%x+$') then return '' end
+    return name
+end
 -- A card is a scoped hint, never an instruction to replace stronger file data.
 -- This function is shared by the title renderer, TheIntroDB and AniSkip.
 function M.reconcile(independent,card,context)
@@ -48,7 +63,7 @@ function M.reconcile(independent,card,context)
         return own
     end
     if context.pending then return keep('pending') end
-    local physical=context.path or (not mp.get_property('path',''):find('://',1,true) and mp.get_property('path','') or '')
+    local physical=physical_path(context)
     local parsed=fmt.parse(physical)
     local episode_name=(physical:match('[^/\\]+$') or physical):match('^%d+[%. _%-]')
     local specific=own.tmdb_id~=nil or own.mal_id~=nil or own.source_confirmed==true
@@ -184,6 +199,10 @@ function M.current(raw)
     local hint=enrich(copy(data))
     local context=mp.get_property_native and source.current() or {}
     local independent=anime.from_source(raw or mp.get_property('media-title',''),context)
+    if not context.path and not context.pending and mp.get_property('path',''):match('^https?://') then
+        local physical=physical_path(context)
+        if physical~='' then independent=anime.from_source(physical,{path=physical}) end
+    end
     return M.reconcile(independent,hint,context)
 end
 return M
