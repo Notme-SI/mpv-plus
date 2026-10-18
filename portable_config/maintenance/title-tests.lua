@@ -30,6 +30,11 @@ return function(path)
     assert(#f.animation_candidates({{id=1,genre_ids={18}}})==0)
     assert(f.parse('Ричер.S01E01.1080p.mkv').title=='Ричер')
     assert(f.parse('http://localhost:8090/stream?link=private').title=='')
+    for _,dimensions in ipairs({'1920x1080','3840X2160','1280×720','1920 x 1080'}) do
+        local technical=f.parse('Kimetsu no Yaiba '..dimensions..' WEBRip.mkv')
+        assert(not technical.season and not technical.episode,'Resolution is not a season/episode: '..dimensions)
+    end
+    assert(f.parse('Show.5x03.1920x1080.mkv').season==5 and f.parse('Show.5x03.1920x1080.mkv').episode==3)
     assert(f.language('rus')=='ru' and f.language('en-US')=='en' and f.language('ukr')=='uk')
     assert(f.match_result({{id=1,name='Ричер',original_name='Reacher',first_air_date='2022-01-01'}},a).id==1)
     assert(not f.match_result({{id=2,name='Preacher'}},a))

@@ -1,0 +1,32 @@
+name: Verify source and package
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check release documentation logic
+        run: node --test tools/*.test.cjs
+      - name: Fetch pinned binary base
+        shell: pwsh
+        run: Invoke-WebRequest 'https://github.com/Notme-SI/mpv-plus/releases/download/v1.0.3/mpv%2B-1.0.3.zip' -OutFile "$env:RUNNER_TEMP/base.zip"
+      - name: Build verified package
+        shell: pwsh
+        run: python -X utf8 tools/build-package.py --base "$env:RUNNER_TEMP/base.zip"
+      - name: Verify package with real mpv
+        shell: pwsh
+        run: |
+          $version=(Get-Content VERSION -Raw).Trim()
+          Expand-Archive "dist/mpv+-$version.zip" "$env:RUNNER_TEMP/player"
+          $root="$env:RUNNER_TEMP/player/mpv+-$version"
+          & "$root/portable_config/maintenance/Test-Extensions.ps1" -Executable "$root/mpv+.exe" -ConfigRoot "$root/portable_config"
+      - name: Validate installer payload
+        run: python -X utf8 installer/prepare.py

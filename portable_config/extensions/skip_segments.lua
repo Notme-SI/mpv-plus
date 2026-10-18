@@ -72,10 +72,10 @@ function M.aniskip(results,duration)
     return best
 end
 local labels={
-    intro={'op','opening','intro','заставка','опенинг'},
-    credits={'ed','ending','outro','credits','титры','эндинг'},
+    intro={'op','opening','opening theme','openingtheme','opening song','intro','заставка','опенинг'},
+    credits={'ed','ending','ending theme','endingtheme','ending song','outro','credits','титры','эндинг'},
     recap={'recap','previously','previously on','рекап','ранее в сериале'},
-    preview={'preview','next episode','анонс','превью'},
+    preview={'preview','next episode','next episode preview','nextepisodepreview','next notice','nextnotice','анонс','превью'},
 }
 function M.kind(title,normalize)
     title=(title or ''):gsub('^%s*%d+[%s%.%-:]+','')

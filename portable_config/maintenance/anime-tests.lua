@@ -14,11 +14,40 @@ return function(path)
     assert(not anime.enrich(unknown,fmt.parse(unknown),index).mal_id,'Unknown season must not use first-season times')
     local raw='01. Unknown Film 3.mkv'
     assert(anime.enrich(raw,fmt.parse(raw),index).title==fmt.parse(raw).title,'Do not strip unconfirmed titles')
+    local demon=anime.index({['Kimetsu no Yaiba']=38000})
+    local arcs=anime.index({['Kimetsu no Yaiba']=38000,['Demon Slayer - Kimetsu no Yaiba Entertainment District Arc']=47778,
+        ['Kimetsu no Yaiba - Hashira Geiko Hen']=55701})
+    for _,case in ipairs({
+        {folder='Demon Slayer - Kimetsu no Yaiba Entertainment District Arc',season=3,mal='47778'},
+        {folder='Kimetsu no Yaiba - Hashira Geiko Hen [TV-4] [2024] [WEBRip] [1080p] [RUS + JAP]',season=5,mal='55701'},
+    }) do
+        local identity=anime.from_source('Kimetsu no Yaiba - 03 1920x1080.mkv',{path=case.folder..'/03.1920x1080.mkv'},arcs)
+        assert(tostring(identity.mal_id)==case.mal and identity.season==case.season,'Named torrent arc must beat an inferred first season')
+        assert(identity.episode==3 and identity.tmdb_season==case.season and identity.tmdb_episode==3,'Use the same coordinates for title and skip providers')
+    end
+    for _,name in ipairs({'02.Trainer.Sakonji.Urokodaki.mkv','02.mkv'}) do
+        local data=anime.from_source(name,{path='Kimetsu no Yaiba/'..name},demon)
+        assert(data.mal_id=='38000' and data.episode==2,'Resolve episode-only files from their folder')
+        data=anime.from_source(name,{title='Kimetsu no Yaiba',path=name},demon)
+        assert(data.mal_id=='38000' and data.episode==2,'Resolve episode-only files from the torrent title')
+        assert(not anime.from_source(name,{title='Unknown Show',path=name},demon).anime,'Never invent a series match')
+    end
+    local episode_title=anime.from_source('13 Something More Important Than Life.mkv',
+        {path='Kimetsu no Yaiba/13 Something More Important Than Life.mkv'},demon)
+    assert(episode_title.mal_id=='38000' and episode_title.episode==13,
+        'Use the torrent/folder series when the file starts with an episode title')
+    assert(not anime.from_source('02.mkv',{},anime.index({['!!!']=1})).anime,'Empty title is not a catalog match')
     local chapters={{time=0,title='Prologue'},{time=62.94,title='Opening'},{time=152.993,title='Episode'},
         {time=1335,title='Ending'},{time=1425.053,title='Epilogue'}}
     local native=skips.from_chapters(chapters,1440.085,fmt.normalize)
     assert(math.abs(native.intro[1].start_ms-62940)<0.001 and math.abs(native.intro[1].end_ms-152993)<0.001)
     assert(native.credits[1].start_ms==1335000 and not native.preview,'Epilogue is not automatically skippable')
+    local themed={{time=0,title='chapter 1'},{time=32,title='opening theme'},{time=121,title='subtitle'},
+        {time=128,title='chapter 2'},{time=478,title='chapter 3'},{time=1289,title='ending theme'},
+        {time=1379,title='next notice'}}
+    local themed_native=skips.from_chapters(themed,1380,fmt.normalize)
+    assert(themed_native.intro[1].start_ms==32000 and themed_native.credits[1].start_ms==1289000
+        and themed_native.preview[1].start_ms==1379000,'Recognize theme and next-notice chapter names')
     assert(not next(skips.from_chapters({{time=0,title='Part 01'},{time=90,title='Part 02'}},1440,fmt.normalize)))
     assert(not next(skips.from_chapters({{time=0,title='Opening'}},1440,fmt.normalize)),'Unknown intro end is unsafe')
     assert(not next(skips.from_chapters({{time=0,title='Opening'},{time=700,title='Episode'}},1440,fmt.normalize)))
@@ -49,7 +78,7 @@ return function(path)
     local real=mp
     local saved=package.loaded['mpv-build/ui_locale'];package.loaded['mpv-build/ui_locale']=nil
     local props={['time-pos']=70,['idle-active']=false,['user-data/interface-language']='ru'}
-    local observers,overlay={},{}
+    local observers,overlay,timer={},{},nil
     local function get(k,d) if props[k]==nil then return d end;return props[k] end
     local function noop() end
     local mock={get_property_native=get,get_property_number=get,get_property_bool=get,
@@ -58,6 +87,9 @@ return function(path)
         create_osd_overlay=function() return overlay end,get_osd_size=function() return 1280,720 end,
         observe_property=function(k,_,f) observers[k]=f end,register_event=noop,
         add_forced_key_binding=noop,remove_key_binding=noop,commandv=noop}
+    mock.add_timeout=function(delay,fn)
+        timer={delay=delay,fn=fn,kill=noop};return timer
+    end
     overlay.update=noop;overlay.remove=function() overlay.data='' end
     local ok,err=xpcall(function()
         mp=mock
@@ -76,6 +108,14 @@ return function(path)
         assert(ui.menu({type='chapters',items={{title='Opening'},{title='Chapter named by author'}}}).items[1].title=='Intro (OP)')
         props['time-pos']=160;observers['time-pos']()
         assert(props['user-data/skip-prompt-visible']==false,'Hide the prompt after its interval')
+        props['user-data/interface-language']='ru'
+        observers['user-data/skip-prompt'](nil,{kind='credits',start=63,['end']=153,auto=true,notice=true})
+        assert(timer.delay==3,'Automatic skip confirmation lasts 3 seconds')
+        observers['user-data/skip-prompt'](nil,{})
+        observers['time-pos']()
+        assert(props['user-data/skip-prompt-visible'],'Normal updates must not erase the skip confirmation')
+        assert(overlay.data:find('Автопропуск:',1,true),'Show the cause of the seek')
+        timer.fn();assert(not props['user-data/skip-prompt-visible'],'Confirmation expires')
     end,debug.traceback)
     mp=real;package.loaded['mpv-build/ui_locale']=saved
     assert(ok,err)

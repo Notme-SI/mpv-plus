@@ -1157,5 +1157,73 @@
   {
     "ru": "Актуально",
     "en": "Up to date"
+  },
+  {
+    "en": "Manual timestamp search",
+    "ru": "Ручной поиск таймкодов"
+  },
+  {
+    "en": "Title S1 E2",
+    "ru": "Название S1 E2"
+  },
+  {
+    "en": "Found",
+    "ru": "Найдено"
+  },
+  {
+    "en": "Auto-skip: Intro",
+    "ru": "Автопропуск: Заставка"
+  },
+  {
+    "en": "Auto-skip: Recap",
+    "ru": "Автопропуск: Ранее в сериале"
+  },
+  {
+    "en": "Auto-skip: Credits",
+    "ru": "Автопропуск: Титры"
+  },
+  {
+    "en": "Auto-skip: Preview",
+    "ru": "Автопропуск: Анонс"
+  },
+  {
+    "en": "Automatic skipping",
+    "ru": "Автоматический пропуск"
+  },
+  {
+    "en": "Automatically",
+    "ru": "Автоматически"
+  },
+  {
+    "en": "Manually",
+    "ru": "По кнопке"
+  },
+  {
+    "en": "Could not save skip preferences",
+    "ru": "Не удалось сохранить настройки пропуска"
+  },
+  {
+    "en": "Automatic skipping requires timestamps. Your selection is saved.",
+    "ru": "Автопропуск работает только при наличии таймкодов. Выбор сохраняется."
+  },
+  {
+    "ru": "Автопропуск: Заставки",
+    "en": "Automatic skip: Intro"
+  },
+  {
+    "ru": "Автопропуск: Титр",
+    "en": "Automatic skip: Credits"
+  },
+  {
+    "ru": "Автопропуск: Анонса",
+    "en": "Automatic skip: Preview"
+  },
+  {
+    "ru": "Ручной поиск таймкодов (аниме)",
+    "en": "Manual timestamp search (anime)"
+  },
+  {
+    "ru": "Пример: Название 1 1 / Name 1 1",
+    "en": "Example: Russian title 1 1 / English title 1 1"
   }
 ]

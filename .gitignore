@@ -35,3 +35,9 @@ cookies.txt
 
 # Only clean defaults belong in tracked script-opts files.
 # Never copy a personal installation into this checkout.
+
+**/volume-state.json
+
+**/anime-bindings.json
+
+**/history.json

@@ -1,24 +1,29 @@
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import hashlib
 import json
 import zipfile
 import sys
 
 ROOT = Path(__file__).resolve().parent
-ARCHIVE = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT.parent / 'dist/mpv+-1.0.3.zip'
+VERSION = (ROOT.parent / 'VERSION').read_text(encoding='utf-8').strip()
+ARCHIVE = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT.parent / f'dist/mpv+-{VERSION}.zip'
 EXPECTED = Path(str(ARCHIVE) + '.sha256').read_text(encoding='utf-8-sig').split()[0].lower()
 digest = hashlib.sha256(ARCHIVE.read_bytes()).hexdigest()
 if digest != EXPECTED:
     raise SystemExit('The public archive changed. Review it before packaging.')
 
 payload = ROOT / 'payload'
+if payload.exists() and any(payload.iterdir()):
+    raise SystemExit('installer/payload is not empty. Use a clean checkout or remove the old generated payload first.')
 manifest = {}
 with zipfile.ZipFile(ARCHIVE) as archive:
     for item in archive.infolist():
         if item.is_dir():
             continue
-        parts = Path(item.filename).parts
-        if len(parts) < 2 or not parts[0].startswith('mpv+-') or '..' in parts:
+        normalized = item.filename.replace('\\', '/')
+        entry = PurePosixPath(normalized)
+        parts = entry.parts
+        if entry.is_absolute() or ':' in normalized or len(parts) < 2 or parts[0] != f'mpv+-{VERSION}' or '..' in parts:
             raise SystemExit('Unexpected archive path')
         relative = Path(*parts[1:])
         target = payload / relative
@@ -50,4 +55,3 @@ for relative in sorted(manifest):
 (ROOT / 'files.iss').write_text('\n'.join(entries) + '\n', encoding='utf-8-sig')
 (ROOT / 'payload-manifest.json').write_text(json.dumps({'archive_sha256': digest, 'files': manifest, 'preserved': preserved}, indent=2, ensure_ascii=False), encoding='utf-8')
 print(json.dumps({'files': len(manifest), 'bytes': sum(p.stat().st_size for p in payload.rglob('*') if p.is_file()), 'preserved_files': len(preserved)}))
-

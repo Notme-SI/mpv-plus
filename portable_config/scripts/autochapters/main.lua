@@ -15,6 +15,10 @@ local encoding = require "encoding"
 local root=mp.command_native({'expand-path','~~/'})
 local title_format=dofile(root..'/extensions/title_format.lua')
 local anime_identity=dofile(root..'/extensions/anime_identity.lua')
+local source_context=dofile(root..'/extensions/media_source.lua')
+local settings=dofile(root..'/extensions/user_settings.lua')
+local manual=dofile(root..'/extensions/manual_identity.lua')
+local lampa=dofile(root..'/extensions/lampa_context.lua')
 
 local options = {
     create_chapters = true,
@@ -64,6 +68,15 @@ end
 local function guess(path, auto)
     if not path or path == "" then
         return nil, nil
+    end
+    local corrected=auto and manual.current(path) or manual.parse(path)
+    if corrected then return corrected.title,corrected.episode,corrected.season,corrected.year end
+    local card=auto and lampa.current(path)
+    if card then return card.title,card.episode,card.season,card.year end
+    local contextual=anime_identity.from_source(path,auto and source_context.current() or {})
+    if contextual.unresolved_context then return end
+    if contextual.anime and contextual.episode then
+        return contextual.title,contextual.episode,contextual.season,contextual.year
     end
 
     local guessit = mp.command_native({name = "subprocess", playback_only = false, capture_stdout = true, args = {"powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", utils.join_path(script_dir, "guessit-json.ps1"), "-Name", path}})
@@ -127,7 +140,7 @@ local function update_db() database.request(true) end
 mp.add_timeout(5, function() database.request(false) end)
 
 local function resolve_relations(mal_id, episode)
-    if not relations[mal_id] then
+    if not relations or not relations[mal_id] then
         return mal_id, episode
     end
     local ep = episode or 0
@@ -154,6 +167,12 @@ local function read_json(path)
 end
 
 local function api_lookup(title, episode, duration, auto, season, year)
+    local card=auto and (manual.current(placeholder_title) or lampa.current())
+    if auto and not card then
+        local contextual=anime_identity.from_source(placeholder_title,source_context.current())
+        if contextual.mal_id then card=contextual end
+    end
+    if not (card and card.mal_id) then
     if borked then return end
 
     if anime == nil or relations == nil then
@@ -176,7 +195,8 @@ local function api_lookup(title, episode, duration, auto, season, year)
         anime = normalized
     end
     anime_index=anime_index or anime_identity.index(anime)
-    local identity=anime_identity.enrich(title,{title=title,episode=episode,season=season,year=year,kind='tv'},anime_index)
+    end
+    local identity=(card and card.mal_id) and card or anime_identity.enrich(title,{title=title,episode=episode,season=season,year=year,kind='tv'},anime_index)
     local mal_id=identity.mal_id
     if not mal_id or not episode or episode<1 then return end
 
@@ -253,7 +273,7 @@ local function find_chapters(media_title, auto)
     if not found and current_lookup() then
         mp.set_property_native("user-data/autochapters", {})
     end
-    return found, title, episode
+    return found, title, episode, season, year
 end
 
 -- TorrServer/Lampa playlists store the real episode filename in the M3U title.
@@ -271,7 +291,9 @@ file_load = function()
     mp.set_property('user-data/autochapters-media', '')
     mp.set_property_native('user-data/guessit', {})
     placeholder_title = episode_name()
-    if not options.on_file_load or placeholder_title == '' or placeholder_title == 'stream' then return end
+    if not options.on_file_load then return end
+    local card=lampa.current(placeholder_title)
+    if (placeholder_title == '' or placeholder_title == 'stream') and not card then return end
     find_chapters(placeholder_title, true)
 end
 mp.register_event('end-file', function()
@@ -281,15 +303,44 @@ mp.register_event('end-file', function()
 end)
 
 local function search()
+    mp.commandv('script-message-to','uosc','close-menu')
     local pause_and_restore = options.pause_on_search and mp.get_property_bool("pause") == false
 
+    local corrected=manual.current(placeholder_title)
+    local default=corrected and string.format('%s %d %d',corrected.title,corrected.season or 1,corrected.episode) or ''
     input.get({
-        prompt = "Название аниме и номер серии:",
+        prompt = "Пример: Название 1 1 / Name 1 1",
         submit = function (media_title)
             placeholder_title = media_title
             if media_title ~= "" then
                 mp.add_timeout(0.05, function()
-                    local found, title, episode = find_chapters(media_title)
+                    local candidates={}
+                    for value in media_title:gmatch('[^/|]+') do
+                        value=value:gsub('^%s+',''):gsub('%s+$','')
+                        if value~='' then candidates[#candidates+1]=value end
+                    end
+                    if #candidates==0 then candidates={media_title} end
+                    local found,title,episode,season,year,manual_match
+                    for _,candidate in ipairs(candidates) do
+                        local parsed=manual.parse(candidate)
+                        if parsed then
+                            -- GuessIt cannot reliably parse Cyrillic titles.  Feed the
+                            -- canonical S/E form through the same lookup path and keep
+                            -- the explicit season/episode supplied by the user.
+                            manual_match=parsed
+                            found,title,episode,season,year=find_chapters(
+                                string.format('%s S%d E%d',parsed.title,parsed.season,parsed.episode))
+                            title,episode,season,year=parsed.title,parsed.episode,parsed.season,parsed.year
+                        else
+                            found,title,episode,season,year=find_chapters(candidate)
+                        end
+                        if found then break end
+                    end
+                    if found then
+                        local chosen=manual_match or anime_identity.enrich(title,{title=title,season=season,episode=episode,kind='tv'})
+                        chosen=anime_identity.enrich(title,chosen)
+                        if chosen.mal_id then manual.save(chosen) end
+                    end
                     if not found then
                         msg.info("Таймкоды не найдены: " .. (title and (title .. (episode and (" - серия " .. episode) or "")) or media_title))
                     end
@@ -304,8 +355,8 @@ local function search()
                 mp.set_property_bool("pause", false)
             end
         end,
-        default_text = placeholder_title,
-        cursor_position = #placeholder_title + 1
+        default_text = default,
+        cursor_position = #default + 1
     })
 
     if pause_and_restore then
@@ -315,6 +366,9 @@ end
 
 mp.add_key_binding(nil, "search", search)
 mp.add_key_binding(nil, "update", update_db)
+mp.observe_property('user-data/torrserver-context','native',function()
+    if not mp.get_property_bool('idle-active',true) then mp.add_timeout(0,file_load) end
+end)
 
 if options.hook then
     mp.add_hook("on_preloaded", 50, file_load)

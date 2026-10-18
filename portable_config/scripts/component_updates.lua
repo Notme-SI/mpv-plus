@@ -70,4 +70,3 @@ mp.add_timeout(1,function()
         mp.osd_message(ui.text(result.success and 'Компоненты обновлены' or 'Обновление не завершено. Откройте журнал.'),5)
     end
 end)
-

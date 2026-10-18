@@ -36,7 +36,7 @@ return function(path)
         assert(props['user-data/readable-title'].text:find('серия 4',1,true))
         props['current-tracks/audio']={lang='eng'}
         if observers['current-tracks/audio'] then observers['current-tracks/audio']() end
-        tick();assert(#requests==1,'Audio selection must not change title language')
+        tick();assert(#requests==1,'Audio selection must not change title language: '..#requests..' '..require('mp.utils').format_json(props['user-data/readable-title']))
         props['user-data/interface-language']='en';observers['user-data/interface-language']();tick()
         assert(#requests==2)
         respond(1,{results={{id=99,name='Устаревший ответ',original_name='Reacher'}}})
@@ -108,6 +108,32 @@ return function(path)
         requests[19].callback(false,{status=7,stdout=''})
         assert(props['user-data/readable-title'].text=='Дандадан · Сезон 1, серия 3','Network failure retains local title')
         events['end-file']()
+        props['media-title']='Runner.2026.1080p.WEB-DL.mkv';props.playlist[1].title=props['media-title']
+        events['file-loaded']();tick()
+        assert(props['user-data/readable-title'].text=='Курьер (2026)','Runner has an immediate Russian movie title')
+        events['end-file']()
+        for _,case in ipairs({
+            {folder='Demon Slayer - Kimetsu no Yaiba Entertainment District Arc',season=3},
+            {folder='Kimetsu no Yaiba - Hashira Geiko Hen [TV-4] [2024] [WEBRip] [1080p] [RUS + JAP]',season=5},
+        }) do
+            props.path='http://localhost/stream?link=abcdef&index=3&play'
+            props['media-title']='Kimetsu no Yaiba - 03 1920x1080.mkv';props.playlist[1].title=props['media-title']
+            props['user-data/torrserver-context']={media=props.path,path=case.folder..'/03.1920x1080.mkv'}
+            props['user-data/guessit']={input=props.path,season=1920,episode=1080}
+            local before=#requests
+            events['file-loaded']();tick()
+            for n=before+1,#requests do
+                if requests[n].args.args[#requests[n].args.args]:find('/tv/85937?',1,true) then respond(n,{name='Истребитель демонов'});break end
+            end
+            local season_request
+            for n=before+1,#requests do
+                local url=requests[n].args.args[#requests[n].args.args]
+                if url:find('/season/',1,true) then season_request=n;assert(url:find('/season/'..case.season..'?',1,true),'Use the arc season for episode names') end
+            end
+            assert(season_request);respond(season_request,{episodes={{episode_number=3,name='Верная серия арки'}}})
+            assert(props['user-data/readable-title'].text=='Истребитель демонов · Сезон '..case.season..', серия 3: Верная серия арки')
+            events['end-file']()
+        end
     end,debug.traceback)
     mp=real;package.loaded['mp.options']=options
     assert(ok,err)

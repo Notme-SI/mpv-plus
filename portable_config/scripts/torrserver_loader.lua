@@ -1,4 +1,5 @@
 -- Local launcher; upstream code and build extensions are maintained separately.
+dofile(mp.command_native({'expand-path','~~/extensions/media_source.lua'})).install()
 dofile(mp.command_native({'expand-path','~~/extensions/torrserver.lua'})).install()
 local settings=dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua')
 local server={scheme='http',host='127.0.0.1',port='8090',use_edl=true}

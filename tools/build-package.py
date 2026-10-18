@@ -10,8 +10,8 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--base', type=Path, required=True, help='Clean mpv+ release ZIP (legacy MPV ZIP is also supported)')
 args = parser.parse_args()
 base = args.base.resolve()
-checksums = (ROOT / 'releases/1.0.1/SHA256SUMS.txt').read_text().splitlines()
-expected = next(line.split()[0] for line in checksums if line.split()[-1] == base.name)
+checksums = (ROOT / 'releases/1.0.3/SHA256SUMS.txt').read_text().splitlines()
+expected = next(line.split()[0].lower() for line in checksums if line.split()[-1] == 'mpv+-1.0.3.zip')
 if hashlib.sha256(base.read_bytes()).hexdigest() != expected:
     raise SystemExit('The base ZIP is not the verified public release')
 version = (ROOT / 'VERSION').read_text().strip()
@@ -27,7 +27,7 @@ with zipfile.ZipFile(base) as archive:
         path = PurePosixPath(item.filename)
         if item.is_dir():
             continue
-        if path.is_absolute() or '..' in path.parts or ':' in item.filename or path.parts[0] not in {'MPV-1.0.1','mpv+-1.0.1'}:
+        if path.is_absolute() or '..' in path.parts or ':' in item.filename or path.parts[0] != 'mpv+-1.0.3':
             raise SystemExit('Unexpected archive entry')
         files[PurePosixPath(*path.parts[1:]).as_posix()] = archive.read(item)
 
@@ -40,7 +40,10 @@ for name in tracked:
 
 # Retire the previous launcher name when rebuilding from a legacy ZIP.
 files.pop('Обновить MPV.cmd',None)
-files['mpv+.exe'] = files.pop('mpv.exe')
+# The verified base already contains mpv+.exe; never rename its small launcher
+# over the real player when moving from the old 1.0.1 base to 1.0.3.
+if 'mpv+.exe' not in files:
+    raise SystemExit('Verified base is missing the player binary')
 files.pop('mpv.com',None)
 # Build the narrow compatibility launcher; it only forwards to ../mpv+.exe.
 import os
@@ -48,22 +51,24 @@ compiler = Path(os.environ['WINDIR']) / 'Microsoft.NET/Framework64/v4.0.30319/cs
 launcher = ROOT / 'dist' / 'lampa-compat' / 'mpv.exe'
 launcher.parent.mkdir(parents=True,exist_ok=True)
 subprocess.run([str(compiler),'/nologo','/target:winexe','/optimize+',f'/out:{launcher}',str(ROOT/'tools/LampaLauncher.cs')],check=True)
-files['compat/mpv.exe'] = launcher.read_bytes()
+files.pop('compat/mpv.exe', None)
 files['mpv.exe'] = launcher.read_bytes()
-files['portable_config/data/anime-catalog.json'] = (ROOT / 'portable_config/data/anime-catalog.json').read_bytes()
+catalog = ROOT / 'portable_config/data/anime-catalog.json'
+if catalog.is_file():
+    files['portable_config/data/anime-catalog.json'] = catalog.read_bytes()
 
-# Runtime files added after the initial publication are packaged as well.
-for folder in ('portable_config/extensions','portable_config/scripts','portable_config/maintenance'):
-    for source in (ROOT/folder).rglob('*'):
-        if source.is_file() and '__pycache__' not in source.parts:
-            files[source.relative_to(ROOT).as_posix()]=source.read_bytes()
+# Only tracked source enters a public package. Stage new files before building.
 files['README.txt']=(ROOT/'README.txt').read_bytes()
+files['doc/Инструкция.md']=(ROOT/'docs/USAGE.md').read_bytes()
+files['doc/VERSION']=(ROOT/'VERSION').read_bytes()
 files['LICENSES/SOURCES.txt']=(ROOT/'SOURCES.txt').read_bytes()
 for name in list(files):
     if (name.endswith(('.cmd','.bat')) or name in {'ПРОЧТИ МЕНЯ.txt','PUBLIC-AUDIT.txt','SOURCES.txt','VERSION.txt'}): files.pop(name)
+    elif PurePosixPath(name).name in {'volume-state.json','window-state.json','audio-preferences.json','subtitle-preferences.json','anime-bindings.json','history.json'} or any(part in {'cache','watch_later'} for part in PurePosixPath(name).parts):
+        files.pop(name)
 # Public packages must never inherit personal server credentials.
 for name in files:
-    if PurePosixPath(name).name in {'audio-preferences.json', 'subtitle-preferences.json', 'window-state.json'}:
+    if PurePosixPath(name).name in {'audio-preferences.json', 'subtitle-preferences.json', 'window-state.json', 'volume-state.json', 'anime-bindings.json', 'history.json'}:
         raise SystemExit('Personal playback preferences in public package')
 ts = files['portable_config/script-opts/torrserver-loader.conf'].decode('utf-8-sig')
 settings = {}

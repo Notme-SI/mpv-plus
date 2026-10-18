@@ -228,9 +228,7 @@ return function(script_directory)
             cursor:zone('wheel_down',box,function() self:handle_wheel_down() end)
             cursor:zone('wheel_up',box,function() self:handle_wheel_up() end)
             local ass=assdraw.ass_new()
-            if theme.glass() then theme.panel(ass,box,opacity,height/2)
-            else ass:rect(box.ax,box.ay,box.bx,box.by,{color='111111',radius=height/2,border=0.6*s,
-                border_color='ffffff',opacity={main=0.44*opacity,border=0.12*opacity}}) end
+            theme.panel(ass,box,opacity,height/2)
             ass:txt(cx,cy-4*s,5,text,{size=size,color='ffffff',border=0,border_color='000000',opacity=opacity})
             for i=-3,3 do
                 local x=cx+i*7*s

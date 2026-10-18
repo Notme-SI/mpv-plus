@@ -12,15 +12,15 @@
 python tools/build-anime-catalog.py --database "C:\Downloads\anime-offline-database.json" --mapping "C:\Downloads\anime-list-full.json"
 ```
 
-Результат — `portable_config/data/anime-catalog.json`. Он исключён из Git и обязателен для сборки ZIP. Источники и лицензии данных перечислены в [`SOURCES.txt`](SOURCES.txt). Для воспроизведения конкретного каталога используйте те же снимки входных JSON.
+Результат — `portable_config/data/anime-catalog.json`. Он исключён из Git. Без пересборки каталога используется снимок из проверенной базы 1.0.3. Источники и лицензии данных перечислены в [`SOURCES.txt`](SOURCES.txt). Для воспроизведения конкретного каталога используйте те же снимки входных JSON.
 
 ## ZIP
 
-Скачайте чистый [`mpv+-1.0.1.zip`](https://github.com/Notme-SI/mpv-plus/releases/tag/v1.0.1). Это фиксированная база с двоичными компонентами, шрифтами и данными, а не номер собираемой версии. Скрипт принимает архив с именем из [`releases/1.0.1/SHA256SUMS.txt`](releases/1.0.1/SHA256SUMS.txt) и сверяет SHA-256. Подставлять вместо него последний выпуск нельзя.
+Скачайте чистый [`mpv+-1.0.3.zip`](https://github.com/Notme-SI/mpv-plus/releases/tag/v1.0.3). Это фиксированная база с двоичными компонентами, шрифтами и данными. Скрипт сверяет SHA-256 по [`releases/1.0.3/SHA256SUMS.txt`](releases/1.0.3/SHA256SUMS.txt). Подставлять вместо него произвольный последний выпуск нельзя. В сборку входят только отслеживаемые Git исходники: сначала добавьте новые файлы через `git add`.
 
 ```powershell
 $releaseVersion = (Get-Content -LiteralPath .\VERSION -Raw).Trim()
-python tools/build-package.py --base "C:\Downloads\mpv+-1.0.1.zip"
+python tools/build-package.py --base "C:\Downloads\mpv+-1.0.3.zip"
 ```
 
 Результаты: `dist/mpv+-<версия>.zip` и `dist/mpv+-<версия>.zip.sha256`. Исходный ZIP не изменяется. Скрипт накладывает файлы текущего checkout, переименовывает основной плеер в `mpv+.exe` и компилирует совместимый запускатель `mpv.exe` для Lampa.

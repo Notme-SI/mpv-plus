@@ -2,6 +2,15 @@
 local M={}
 function M.parse(message)
     if type(message)~='string' then return end
+    message=message:gsub('\r\n','\n')
+    -- TorrServer versions differ in punctuation and in whether the blank
+    -- line before the external-file status is present. Keep parsing the
+    -- stable labels instead of requiring one exact formatted message.
+    local file,state,speed,cache,peers,extra=message:match(
+        '^%s*Loading%s+(.-)%.%.%.%s*\n.-Current state:%s*(.-)%s*\n.-Speed:%s*(.-)%s*\n.-Cache:%s*(.-)%s*\n.-Peers[^:]*:%s*([^\n]*)\n(.*)$')
+    if file then
+        return {file=file,state=state,speed=speed,cache=cache,peers=peers,extra=extra:match('^%s*(.-)%s*$')}
+    end
     local file,state,speed,cache,peers,extra=message:match(
         '^%s*Loading (.-)%.%.%.\nCurrent state: (.-)\nTorrent load info:\nSpeed: (.-)\nCache: (.-)\nPeers·Seeders: ([^\n]*)\n*(.*)$')
     if not file then return end
@@ -16,13 +25,14 @@ local function shorten(value,limit)
     if #chars<=limit then return value end
     return table.concat(chars,'',1,limit-1)..'…'
 end
-function M.render(data,language,w,h)
+function M.render(data,language,w,h,playback)
     local ass=require('mp.assdraw').ass_new()
     local en=language=='en'
     local scale=math.max(0.8,math.min(2.1,h/720))
-    local width=math.min(430*scale,w-28*scale)
-    local x,y=w-width-24*scale,24*scale
-    local height=(data.extra~='' and 284 or 258)*scale
+    local width=math.min(440*scale,w-20*scale)
+    local x,y=w-width-10*scale,10*scale
+    local height=(data.extra~='' and 218 or 190)*scale
+    if playback then height=height+54*scale end
     ass:new_event()
     ass:append('{\\an7\\pos(0,0)\\bord0\\shad0\\1c&H202020&\\1a&H48&}')
     ass:draw_start();ass:round_rect_cw(x,y,x+width,y+height,12*scale);ass:draw_stop()
@@ -31,31 +41,46 @@ function M.render(data,language,w,h)
         ass:append(string.format('{\\an%d\\pos(%.1f,%.1f)\\fnSegoe UI\\fs%.1f\\1c&H%s&\\bord0\\shad0\\b%d}%s',
             align or 7,px,py,size*scale,color,bold and 1 or 0,escape(value)))
     end
-    text(en and 'NETWORK STATISTICS' or 'СТАТИСТИКА СЕТИ',x+20*scale,y+18*scale,18,'C8C8C8',true)
-    text(shorten(data.file,52),x+20*scale,y+52*scale,14,'9B9B9B')
+    text(en and 'TORRSERVER AND PLAYER' or 'TORRSERVER И ПЛЕЕР',x+12*scale,y+10*scale,20,'C8C8C8',true)
+    text(shorten(data.file,36),x+12*scale,y+38*scale,18,'9B9B9B')
     ass:new_event()
     ass:append('{\\an7\\pos(0,0)\\bord0\\shad0\\1c&HFFFFFF&\\1a&HE0&}')
-    ass:draw_start();ass:rect_cw(x+20*scale,y+82*scale,x+width-20*scale,y+83*scale);ass:draw_stop()
-    local state=data.state
+    ass:draw_start();ass:rect_cw(x+12*scale,y+65*scale,x+width-12*scale,y+66*scale);ass:draw_stop()
+    local state=tostring(data.state or '')
+    -- Some TorrServer builds send the literal string "nil" after the
+    -- initial cache fill. The stream is already playing at that point.
+    if state=='' or state:lower()=='nil' or state:lower()=='unknown' then
+        state=en and 'Playing' or 'Воспроизведение'
+    end
     if not en then
-        state=state:gsub('connecting external files','подключение внешних файлов'):gsub('opening','открытие'):gsub('caching','буферизация')
+        state=state:gsub('connecting external files','Внешние дорожки'):gsub('opening','Открытие'):gsub('caching','Буферизация')
     end
     local cache=en and data.cache or data.cache:gsub(' GB',' ГБ')
     local rows={
         {en and 'State' or 'Состояние',state},
-        {en and 'Speed' or 'Скорость',data.speed},
-        {en and 'Cache' or 'Кеш',cache},
+        {en and 'Server download' or 'Загрузка сервера',data.speed},
+        {en and 'Server cache' or 'Кеш сервера',cache},
         {en and 'Peers · seeders' or 'Пиры · сиды',data.peers},
     }
+    if playback then
+        local function metric(value,unit)
+            if type(value)~='number' or value<0 or value~=value or value==math.huge then
+                return en and 'No data' or 'Нет данных'
+            end
+            return string.format('%.1f %s',value,unit)
+        end
+        rows[#rows+1]={en and 'Player buffer' or 'Запас видео',metric(playback.seconds,en and 's' or 'с')}
+        rows[#rows+1]={en and 'Player read' or 'Чтение mpv',metric(playback.speed and playback.speed/1048576,en and 'MiB/s' or 'МБ/с')}
+    end
     for i,row in ipairs(rows) do
-        local yy=y+(98+(i-1)*38)*scale
-        text(row[1],x+20*scale,yy,17,'999999')
-        text(row[2],x+width-20*scale,yy,17,'FFFFFF',true,9)
+        local yy=y+(76+(i-1)*27)*scale
+        text(row[1],x+12*scale,yy,21,'999999')
+        text(row[2],x+width-12*scale,yy,21,'FFFFFF',true,9)
     end
     if data.extra~='' then
         local extra=data.extra
         if not en then extra=extra:gsub('Connected ','Подключено '):gsub(' external files',' внешних файлов'):gsub('Errors:','Ошибки:') end
-        text(shorten(extra,52),x+20*scale,y+258*scale,14,'999999')
+        text(shorten(extra,38),x+12*scale,y+(playback and 244 or 190)*scale,18,'999999')
     end
     return ass.text
 end
@@ -71,7 +96,10 @@ function M.new(ui)
         local w,h=mp.get_osd_size()
         if not value or w<=0 or h<=0 then overlay:remove();return end
         overlay.res_x=w;overlay.res_y=h
-        overlay.data=M.render(value,ui.language(),w,h);overlay:update()
+        overlay.data=M.render(value,ui.language(),w,h,{
+            seconds=mp.get_property_number('demuxer-cache-duration'),
+            speed=mp.get_property_number('cache-speed'),
+        });overlay:update()
     end
     mp.observe_property('osd-dimensions','native',draw)
     mp.observe_property('user-data/interface-language','native',draw)

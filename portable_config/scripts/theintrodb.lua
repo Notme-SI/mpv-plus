@@ -75,7 +75,14 @@ local config_root=mp.command_native({'expand-path','~~/'})
 local title_format=dofile(config_root..'/extensions/title_format.lua')
 local anime_identity=dofile(config_root..'/extensions/anime_identity.lua')
 local skip_segments=dofile(config_root..'/extensions/skip_segments.lua')
+local settings=dofile(config_root..'/extensions/user_settings.lua')
+local source_context=dofile(config_root..'/extensions/media_source.lua')
+local manual=dofile(config_root..'/extensions/manual_identity.lua')
+local lampa=dofile(config_root..'/extensions/lampa_context.lua')
+local skip_prefs={enabled=true,intro=true,recap=true,credits=true,preview=false}
+settings.options(skip_prefs,'skip_preferences')
 local ru_kind = {intro="Заставка", recap="Ранее в сериале", credits="Титры", preview="Анонс"}
+local auto_kind = {intro="Заставки", recap="Ранее в сериале", credits="Титр", preview="Анонса"}
 local tidb = {
     media = nil,          -- parsed API response
     segments = {},        -- flat list: {kind=, start=, end=} in seconds
@@ -151,7 +158,7 @@ local function identify(path)
     local imdb_id = o.imdb_id
     local season, episode = o.season, o.episode
 
-    local base = path or ""
+    local base = title_format.without_dimensions(path or "")
     if tmdb_id == "" then
         tmdb_id = string.match(base, "[Tt][Mm][Dd][Bb][%s_%-%.]*(%d+)")
     end
@@ -323,7 +330,7 @@ fetch_media = function(file_key, tmdb_id, imdb_id)
         build_segments(tidb.media)
         return
     end
-    local url = api_url(tmdb_id, imdb_id, tidb.season, tidb.episode, o.duration_ms)
+    local url = api_url(tmdb_id, imdb_id, tidb.season, tidb.episode, tidb.duration_ms)
     local args = {
         "curl", "-s", "--max-time", "10", "-w", "\n%{http_code}",
     }
@@ -397,6 +404,17 @@ local function current_segment(pos)
     return nil
 end
 
+local function prompt_id(seg)
+    return tostring(tidb.file_key or mp.get_property('path',''))..':'..seg.kind..':'..tostring(seg.start)..':'..tostring(seg['end'])
+end
+
+local function prompt_segment(pos)
+    for _,seg in ipairs(tidb.segments) do
+        if pos>=math.max(0,(seg.start or 0)-1) and pos<(seg['end'] or math.huge)
+            and tidb.dismissed_prompt~=prompt_id(seg) then return seg end
+    end
+end
+
 local function next_segment_after(pos)
     local best = nil
     for _, seg in ipairs(tidb.segments) do
@@ -412,7 +430,7 @@ local function duration()
     return mp.get_property_number("duration") or 0
 end
 
-local function do_skip(seg, via_ui)
+local function do_skip(seg, via_ui, automatic)
     if seg == nil then return false end
     local target = seg["end"]
     if target == nil or target == math.huge then
@@ -426,16 +444,22 @@ local function do_skip(seg, via_ui)
     if max > 0 and target >= max - 0.2 then
         target = math.max(0, max - 0.1)
     end
+    if automatic then
+        mp.set_property_native('user-data/skip-prompt',{kind=seg.kind,start=seg.start,['end']=seg['end'],auto=true,notice=true})
+    else
+        tidb.dismissed_prompt=prompt_id(seg)
+        mp.set_property_native('user-data/skip-prompt',{clear=true})
+    end
     mp.set_property("pause", "no")
     mp.commandv("seek", tostring(target), "absolute", "exact")
     tidb.seek_grace_until = mp.get_time() + 1.5
-    if o.show_osd == "yes" then
+    if automatic and o.show_osd == "yes" then
         local label = ru_kind[seg.kind] or seg.kind
         if seg["end"] == nil or seg["end"] == math.huge then
-            mp.osd_message(string.format("Пропущено: %s → конец", label), 1.2)
+            mp.osd_message(string.format("Пропущено: %s → конец", label), 3)
         else
             mp.osd_message(
-                string.format("Пропущено: %s → %s", label, fmt_time(seg["end"])), 1.2)
+                string.format("Пропущено: %s → %s", label, fmt_time(seg["end"])), 3)
         end
     end
     return true
@@ -468,14 +492,9 @@ end
 
 local function skip_next()
     local pos = mp.get_property_number("time-pos") or 0
-    local seg = current_segment(pos)
+    local seg = prompt_segment(pos)
     if seg and seg["end"] then
         if do_skip(seg, false) then return end
-    end
-    local nxt = next_segment_after(pos)
-    if nxt then
-        do_skip(nxt, false)
-        return
     end
     if o.show_osd == "yes" then
         mp.osd_message("Нет фрагментов для пропуска", 1.5)
@@ -494,16 +513,17 @@ local function auto_skip_tick()
     local pos = mp.get_property_number("time-pos")
     if pos == nil then return end
     if mp.get_time() < tidb.seek_grace_until then return end
-    -- only seek forward, never fight the user
-    local seg = current_segment(pos)
-    if seg == nil then return end
-    local want = {}
-    for _, kind in ipairs(split_csv(o.auto_skip_types)) do
-        want[kind] = true
+    -- Give the separately rendered banner a full second before seeking, also
+    -- when timestamps arrive late or the intro starts at the first frame.
+    local ready=mp.get_property_native('user-data/skip-prompt-ready',{})
+    for _,seg in ipairs(tidb.segments) do
+        if skip_prefs[seg.kind] and segment_contains(seg,pos) and seg['end'] and seg['end']<math.huge then
+            if ready.id==prompt_id(seg) and mp.get_time()-(tonumber(ready.time) or mp.get_time())>=1 then
+                do_skip(seg,false,true)
+            end
+            return
+        end
     end
-    if not want[seg.kind] then return end
-    if seg["end"] == nil or seg["end"] == math.huge then return end -- don't auto-skip to EOF
-    do_skip(seg, false)
 end
 
 local function start_auto_skip_timer()
@@ -511,19 +531,35 @@ local function start_auto_skip_timer()
         auto_skip_timer:kill()
         auto_skip_timer = nil
     end
-    auto_skip_timer = mp.add_periodic_timer(0.4, auto_skip_tick)
+    auto_skip_timer = mp.add_periodic_timer(0.05, auto_skip_tick)
 end
 
-local function toggle_auto_skip()
-    tidb.auto_skip = not tidb.auto_skip
+local function apply_skip_preferences(save)
+    tidb.auto_skip = skip_prefs.enabled
     if tidb.auto_skip then
         start_auto_skip_timer()
-        mp.osd_message("Автоматический пропуск включён", 1.2)
     else
         if auto_skip_timer then auto_skip_timer:kill() end
         auto_skip_timer = nil
-        mp.osd_message("Автоматический пропуск выключен", 1.2)
     end
+    mp.set_property_native('user-data/skip-preferences',skip_prefs)
+    if save then
+        local file=io.open(settings.path('script-opts/skip_preferences.conf'),'wb')
+        local written,closed
+        if file then
+            local lines={}
+            for _,key in ipairs({'enabled','intro','recap','credits','preview'}) do
+                lines[#lines+1]=key..'='..(skip_prefs[key] and 'yes' or 'no')
+            end
+            written=file:write(table.concat(lines,'\n')..'\n');closed=file:close()
+        end
+        if not written or not closed then mp.osd_message(ui.text('Не удалось сохранить настройки пропуска'),3) end
+    end
+end
+local function toggle_auto_skip()
+    skip_prefs.enabled=not skip_prefs.enabled
+    apply_skip_preferences(true)
+    mp.osd_message(ui.text(skip_prefs.enabled and 'Автоматический пропуск включён' or 'Автоматический пропуск выключен'),3)
 end
 
 -- ---------------------------------------------------------------------------
@@ -531,16 +567,22 @@ end
 -- ---------------------------------------------------------------------------
 -- Use uosc controls instead of global mouse bindings that conflict with its UI.
 local last_button_state = nil
+local last_prompt_state = nil
 local function send_button(seg)
     local label = seg and (ru_kind[seg.kind] or seg.kind) or nil
-    mp.set_property_native('user-data/skip-prompt', seg or {})
-    local key = ui.language()..':'..(seg and (seg.kind .. ':' .. tostring(seg.start)) or 'none')
+    local prompt=seg and {id=prompt_id(seg),kind=seg.kind,start=seg.start,['end']=seg['end'],auto=tidb.auto_skip and skip_prefs[seg.kind]} or {}
+    local prompt_key=(prompt.id or 'none')..':'..tostring(prompt.auto)
+    if prompt_key~=last_prompt_state then
+        last_prompt_state=prompt_key
+        mp.set_property_native('user-data/skip-prompt', prompt)
+    end
+    local key = ui.language()..':'..prompt_key
     if key == last_button_state then return end
     last_button_state = key
     mp.commandv('script-message-to', 'uosc', 'set-button', 'theintrodb', utils.format_json({
         icon = 'fast_forward', active = seg ~= nil,
         badge = false,
-        tooltip = seg and ui.text('Пропустить: '..(seg.kind=='intro' and 'Заставку' or label)) or ui.text('Заставки и титры (Ctrl+I)'),
+        tooltip = seg and ui.text((tidb.auto_skip and skip_prefs[seg.kind] and 'Автопропуск: ' or 'Пропустить: ')..((tidb.auto_skip and skip_prefs[seg.kind] and auto_kind[seg.kind]) or (seg.kind=='intro' and 'Заставку' or label))) or ui.text('Заставки и титры'),
         command = seg and 'script-binding theintrodb/theintrodb-skip-next'
             or 'script-binding theintrodb/theintrodb-toggle-ui',
     }))
@@ -548,7 +590,7 @@ local function send_button(seg)
 end
 
 update_overlay = function()
-    send_button(current_segment(mp.get_property_number('time-pos') or -1))
+    send_button(prompt_segment(mp.get_property_number('time-pos') or -1))
 end
 
 hide_overlay = function()
@@ -557,20 +599,32 @@ hide_overlay = function()
 end
 
 show_overlay = function()
-    local items = {}
+    local items = {{title=ui.text('Автоматический пропуск'),hint=ui.text(skip_prefs.enabled and 'ВКЛ' or 'ВЫКЛ'),
+        icon=skip_prefs.enabled and 'toggle_on' or 'toggle_off',
+        value={'script-message-to','theintrodb','toggle-skip-preference','enabled'}}}
+    for _,kind in ipairs({'recap','intro','credits','preview'}) do
+        items[#items+1]={title=ui.text(ru_kind[kind]),
+            hint=ui.text(skip_prefs[kind] and 'Автоматически' or 'По кнопке'),
+            icon=skip_prefs[kind] and 'check_box' or 'check_box_outline_blank',
+            value={'script-message-to','theintrodb','toggle-skip-preference',kind}}
+    end
+    items[#items].separator=true
     for i, seg in ipairs(tidb.segments) do
         local finish = seg['end'] and fmt_time(seg['end']) or ui.text('конец')
         items[#items + 1] = {
-            title = ui.text('Пропустить: ' .. (seg.kind == 'intro' and 'Заставку' or ru_kind[seg.kind] or seg.kind)),
+            title = ui.text((tidb.auto_skip and skip_prefs[seg.kind] and 'Автопропуск: ' or 'Найдено: ') .. ((tidb.auto_skip and skip_prefs[seg.kind] and auto_kind[seg.kind]) or (seg.kind == 'intro' and 'Заставку' or ru_kind[seg.kind] or seg.kind))),
             hint = fmt_time(seg.start) .. ' → ' .. finish,
-            value = {'script-message-to', 'theintrodb', 'skip-segment', tostring(i)},
+            selectable = false,
         }
     end
-    if #items == 0 then
-        items[1] = {title = ui.text('Для этой серии таймкоды не найдены'), selectable = false}
+    if #tidb.segments == 0 then
+        items[#items+1] = {title = ui.text('Для этой серии таймкоды не найдены'), selectable = false}
     end
+    items[#items+1]={title=ui.text('Ручной поиск таймкодов (аниме)'),hint=ui.text('Название 1 1 / Name 1 1'),
+        value={'script-binding','autochapters/search'}}
     mp.commandv('script-message-to', 'uosc', 'open-menu', utils.format_json({
-        type = 'theintrodb', title = ui.text('Заставки и титры'), items = items,
+        type = 'theintrodb', title = ui.text('Заставки и титры'), items = items,keep_open=true,
+        footnote=ui.text('Автопропуск работает только при наличии таймкодов. Выбор сохраняется.'),
     }))
 end
 
@@ -579,7 +633,19 @@ mp.register_script_message('skip-segment', function(index)
     local seg = tidb.segments[tonumber(index)]
     if seg then do_skip(seg, true) end
 end)
-mp.add_periodic_timer(0.4, update_overlay)
+mp.register_script_message('toggle-skip-preference',function(key)
+    if skip_prefs[key]==nil then return end
+    skip_prefs[key]=not skip_prefs[key];apply_skip_preferences(true);show_overlay()
+end)
+mp.register_script_message('skip-active',function(kind,start)
+    local pos=mp.get_property_number('time-pos',-1)
+    for _,seg in ipairs(tidb.segments) do
+        if seg.kind==kind and seg.start==tonumber(start) and pos>=math.max(0,seg.start-1) and pos<(seg['end'] or math.huge) then
+            do_skip(seg,true);return
+        end
+    end
+end)
+mp.add_periodic_timer(0.05, update_overlay)
 mp.add_timeout(0.5, function() last_button_state = nil; update_overlay() end)
 
 
@@ -671,6 +737,11 @@ local function parse_title_for_search(filename)
     if cut_pos then
         t = t:sub(1, cut_pos - 1)
     end
+    -- A year is often written inside parentheses: "Курьер (1986)" or
+    -- "Одиссея (The Odyssey 2026)". Do not send a dangling bracket or an
+    -- alternate title fragment to the catalog search.
+    t=t:gsub('%s*%([^()]*$',''):gsub('%s*%[[^%[%]]*$','')
+        :gsub('%s*[%-%:%,]+%s*$',''):gsub('%s+$','')
 
     -- clean leftovers; keep pure-digit words ("1917") as the title
     -- only when nothing else survived the cut
@@ -694,37 +765,34 @@ end
 local function tmdb_search(title, year, is_tv, cb)
     if o.tmdb_api_key == "" then cb(nil) return end
     local endpoint = is_tv and "/search/tv" or "/search/movie"
-    local url = "https://api.themoviedb.org/3" .. endpoint
-        .. "?query=" .. urlencode(title)
-        .. "&language=en-US"
-    if year then
-        url = url .. (is_tv and "&first_air_date_year=" or "&year=") .. year
+    local variants={title}
+    local inside=title:match('%(([^()]*)%)')
+    if inside then
+        local outside=title:gsub('%s*%([^()]*%)',''):gsub('%s+$','')
+        inside=inside:gsub('%s+%d%d%d%d%s*$',''):gsub('^%s+',''):gsub('%s+$','')
+        if outside~='' then variants[1]=outside end
+        if inside~='' and inside~=outside then variants[#variants+1]=inside end
     end
-    -- note: the key is sent ONLY as a Bearer header (TMDB v4 JWTs are not
-    -- accepted via the api_key query parameter)
-    local args = {
-        "curl", "-s", "--max-time", "10",
-        "-H", "Authorization: Bearer " .. o.tmdb_api_key,
-        url,
-    }
-    mp.command_native_async({ name = "subprocess", args = args, capture_stdout = true },
-        function(success, res)
-            if not success or not res or res.status ~= 0 then cb(nil) return end
-            local ok, data = pcall(utils.parse_json, res.stdout or "")
-            if not ok or not data or not data.results or #data.results == 0 then
-                cb(nil)
-                return
+    local languages={'en-US','ru-RU'}
+    local function attempt(index,lang)
+        local query=variants[index]
+        if not query then cb(nil);return end
+        local url="https://api.themoviedb.org/3"..endpoint.."?query="..urlencode(query)
+            .."&language="..lang
+        if year then url=url..(is_tv and "&first_air_date_year=" or "&year=")..year end
+        local args={"curl","-s","--max-time","10","-H","Authorization: Bearer "..o.tmdb_api_key,url}
+        mp.command_native_async({name="subprocess",args=args,capture_stdout=true},function(success,res)
+            local ok,data=false,nil
+            if success and res and res.status==0 then ok,data=pcall(utils.parse_json,res.stdout or "") end
+            if ok and data and data.results and #data.results>0 then
+                local best=title_format.match_result(data.results,{title=query,year=tonumber(year)},true)
+                if best then cb(best.id);return end
             end
-            -- prefer a result matching the year, else the top hit
-            local best = data.results[1]
-            if year then
-                for _, r in ipairs(data.results) do
-                    local d = r.release_date or r.first_air_date or ""
-                    if d:sub(1, 4) == year then best = r break end
-                end
-            end
-            cb(best.id)
+            if lang=='en-US' then attempt(index,'ru-RU')
+            else attempt(index+1,'en-US') end
         end)
+    end
+    attempt(1,'en-US')
 end
 
 -- called when no explicit id was found: guess title, search TMDB, then fetch
@@ -738,8 +806,23 @@ local function auto_detect(file_key, filename)
     end
     -- AniSkip identifies anime seasons separately. A generic TMDB top hit can
     -- refer to another adaptation or season; use the verified anime path instead.
-    if anime_identity.enrich(filename,title_format.parse(filename)).anime then return end
+    local identity=lampa.current(filename) or anime_identity.from_source(filename,source_context.current())
+    identity=manual.current(filename) or identity
+    if identity.anime then
+        if identity.tmdb_id and identity.episode and identity.tmdb_season then
+            tidb.tmdb_id=tostring(identity.tmdb_id)
+            tidb.season=tostring(identity.tmdb_season)
+            tidb.episode=tostring(identity.episode+(identity.tmdb_offset or 0))
+            fetch_media(file_key,tidb.tmdb_id,nil)
+        end
+        return
+    end
     local title, year, is_tv, ep_hint = parse_title_for_search(filename)
+    local card=manual.current(filename) or lampa.current(filename)
+    if card then
+        title=(card.original_title and card.original_title~='') and card.original_title or card.title
+        year=card.year and tostring(card.year) or nil;is_tv=card.kind=='tv';ep_hint=card.tmdb_episode or card.episode
+    end
     if not title or title == "" then
         mp.msg.info("Не удалось определить название для поиска заставок", 3)
         return
@@ -797,7 +880,27 @@ local function on_file_loaded()
     local file_key = path .. "|" .. filename
     -- resolve ids for this file
     local tmdb_id, imdb_id, season, episode = identify(filename)
+    local card=manual.current(filename) or lampa.current(filename)
+    if not card then
+        local contextual=anime_identity.from_source(filename,source_context.current())
+        if contextual.anime or contextual.unresolved_context then card=contextual end
+    end
+    if card then
+        tmdb_id=card.tmdb_id and tostring(card.tmdb_id) or nil
+        imdb_id=card.imdb_id
+        season=card.tmdb_season~=nil and tostring(card.tmdb_season) or nil
+        episode=card.tmdb_episode and tostring(card.tmdb_episode) or card.episode and tostring(card.episode+(card.tmdb_offset or 0)) or nil
+        filename=card.title
+    end
+    -- A late torrent-folder identity can correct the season for the same URL.
+    -- Keep both cached segments and in-flight responses scoped to that identity.
+    local duration=mp.get_property_number('duration',0)
+    tidb.duration_ms=o.duration_ms~='' and o.duration_ms or duration>0 and tostring(math.floor(duration*1000+.5)) or nil
+    file_key=file_key..'|'..tostring(tmdb_id or imdb_id)..'|'..tostring(season)..'|'..tostring(episode)..'|'..tostring(tidb.duration_ms)
     tidb.file_key = file_key
+    last_prompt_state=nil
+    tidb.dismissed_prompt = nil
+    mp.set_property_native('user-data/skip-prompt',{clear=true})
     tidb.extra_sources = {}
     tidb.extra_started_key = nil
     tidb.media = nil
@@ -821,6 +924,8 @@ local function on_file_loaded()
         if tidb.file_key == file_key then build_segments(tidb.media or {}) end
     end)
     if filename == "" or filename == "stream" then return end
+    -- A TV card without episode coordinates must not be requested as a movie.
+    if card and card.kind=='tv' and (not season or not episode) then return end
 
     -- store resolved ids so the fetch uses them
     tidb.tmdb_id = tmdb_id
@@ -844,15 +949,23 @@ end
 -- ---------------------------------------------------------------------------
 read_opts()  -- must run before bind() reads o.key_* values
 
+local layout={a='ф',b='и',c='с',d='в',e='у',f='а',g='п',h='р',i='ш',j='о',k='л',l='д',m='ь',n='т',o='щ',p='з',q='й',r='к',s='ы',t='е',u='г',v='м',w='ц',x='ч',y='н',z='я'}
+local function russian_key(keys)
+    if type(keys)~='string' then return end
+    local prefix,last=keys:match('^(.*)([A-Za-z])$')
+    if not last then return end
+    local translated=layout[last:lower()]
+    if not translated then return end
+    if last:match('%u') then translated=translated:upper() end
+    return prefix..translated
+end
 local function bind(keys, name, fn)
     -- Always expose script bindings, including buttons without keyboard shortcuts.
     mp.add_key_binding(keys and keys ~= "" and keys or nil, name, fn)
+    local alias=russian_key(keys)
+    if alias and alias~=keys then mp.add_key_binding(alias,name..'-ru',fn) end
 end
 
-bind(o.key_skip_intro, "theintrodb-skip-intro", function() skip_kind("intro") end)
-bind(o.key_skip_recap, "theintrodb-skip-recap", function() skip_kind("recap") end)
-bind(o.key_skip_credits, "theintrodb-skip-credits", function() skip_kind("credits") end)
-bind(o.key_skip_preview, "theintrodb-skip-preview", function() skip_kind("preview") end)
 bind(o.key_skip_next, "theintrodb-skip-next", skip_next)
 bind(o.key_toggle_ui, "theintrodb-toggle-ui", toggle_overlay)
 bind(o.key_toggle_auto_skip, "theintrodb-toggle-auto-skip", toggle_auto_skip)
@@ -867,16 +980,19 @@ end
 -- ---------------------------------------------------------------------------
 -- init
 -- ---------------------------------------------------------------------------
-tidb.auto_skip = (o.auto_skip == "yes")
-if tidb.auto_skip then
-    start_auto_skip_timer()
-end
+apply_skip_preferences(false)
 
 mp.observe_property('user-data/autochapters', 'native', function()
     if tidb.file_key then build_segments(tidb.media or {}) end
 end)
 mp.observe_property('user-data/file-chapters','native',function()
     if tidb.file_key then build_segments(tidb.media or {}) end
+end)
+mp.observe_property('user-data/autochapters-manual','native',function()
+    if tidb.file_key then on_file_loaded() end
+end)
+mp.observe_property('user-data/torrserver-context','native',function()
+    if tidb.file_key then on_file_loaded() end
 end)
 mp.observe_property('user-data/interface-language','string',function()
     last_button_state=nil;update_overlay()
@@ -900,4 +1016,3 @@ if mp.get_opt("theintrodb-debug") == "yes" then
 end
 
 log("loaded (TheIntroDB %s)", "1.0.0")
-

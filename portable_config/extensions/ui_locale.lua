@@ -134,6 +134,19 @@ function M.menu(data)
         if not has(result,'component_updates/menu') then
             table.insert(result.items,math.max(1,#result.items),{title=M.text('Обновления компонентов'),value={'script-binding','component_updates/menu'}})
         end
+        -- Keep the menu name aligned with the actual feature: it now covers
+        -- intro, recap, credits, preview and automatic-skip preferences.
+        local function rename_skip(node)
+            if type(node)~='table' then return end
+            local binding=(type(node.value)=='table' and node.value[1]=='script-binding' and node.value[2])
+                or (type(node.value)=='string' and node.value:match('^script%-binding%s+(.+)$'))
+            if binding=='theintrodb/theintrodb-toggle-ui' or node.title==M.text('Пропуск заставок') then
+                node.title=M.text('Заставки и титры')
+                node.hint=node.hint or 'Ctrl+I'
+            end
+            for _,child in ipairs(node.items or {}) do rename_skip(child) end
+        end
+        for _,item in ipairs(result.items) do rename_skip(item) end
     end
     return result
 end

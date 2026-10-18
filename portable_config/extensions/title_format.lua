@@ -1,6 +1,12 @@
 -- Pure filename parsing and display formatting. Never changes media/playlist source names.
 local M={}
 local function trim(s) return (s or ''):gsub('^[%s%._%-%(]+',''):gsub('[%s%._%-%(]+$','') end
+function M.without_dimensions(s)
+    return (s or ''):gsub('×','x'):gsub('(%d+)%s*[xX]%s*(%d+)',function(a,b)
+        if tonumber(a)>=180 and tonumber(b)>=180 then return ' ' end
+        return a..'x'..b
+    end)
+end
 function M.decode(s)
     for _=1,2 do s=s:gsub('%%(%x%x)',function(h) return string.char(tonumber(h,16)) end) end
     return s:gsub('[%c]',' ')
@@ -19,7 +25,7 @@ local function cut_technical(s)
     return trim(s:sub(1,cut-1))
 end
 function M.parse(raw)
-    local s=M.decode(raw or '')
+    local s=M.without_dimensions(M.decode(raw or ''))
     if s:match('^edl://') or s:match('^lavfi://') then return {title='',kind='movie'} end
     if s:match('^%a+://') then
         s=s:match('^[^?#]+') or s
@@ -38,8 +44,8 @@ function M.parse(raw)
         return ' '
     end):gsub('%s+',' ')
     out.tmdb_id=s:match('[Tt][Mm][Dd][Bb][%s%-:]*(%d+)')
-    local a,b,season,episode=s:find('[Ss](%d+)%s*[Ee](%d+)')
-    if not a then a,b,season,episode=s:find('(%d+)[xX](%d+)') end
+    local a,b,season,episode=s:find('[Ss](%d%d?)%s*[Ee](%d%d?%d?%d?)%f[%D]')
+    if not a then a,b,season,episode=s:find('%f[%d](%d%d?)[xX](%d%d?%d?%d?)%f[%D]') end
     if not a then a,b,season,episode=s:find('[Ss]eason%s+(%d+)%s+[Ee]pisode%s+(%d+)') end
     if a then
         out.season,out.episode,out.kind=tonumber(season),tonumber(episode),'tv'
@@ -57,7 +63,7 @@ function M.parse(raw)
             a,b,episode=s:find('%s%-%s*(%d%d?%d?%d?)%f[%D]')
             if episode and tonumber(episode)>=1900 and tonumber(episode)<=2100 then a,b,episode=nil,nil,nil end
             if a then
-                out.season,out.episode,out.kind=1,tonumber(episode),'tv'
+                out.season,out.episode,out.kind,out.season_inferred=1,tonumber(episode),'tv',true
                 out.episode_title=cut_technical(s:sub(b+1));s=s:sub(1,a-1)
             end
         end
@@ -67,11 +73,11 @@ function M.parse(raw)
     if not a or out.episode then
         local title,short_season=s:match('^(.-)%s+[Ss](%d+)%s*$')
         if title and trim(title)~='' then
-            out.season,out.kind=tonumber(short_season),'tv'
+            out.season,out.kind,out.season_inferred=tonumber(short_season),'tv',nil
             s=title
         end
     end
-    if parenthesized_season then out.season=parenthesized_season;out.kind='tv' end
+    if parenthesized_season then out.season=parenthesized_season;out.kind='tv';out.season_inferred=nil end
     s=cut_technical(s)
     for p,y in s:gmatch('()(%d%d%d%d)') do
         if tonumber(y)>=1900 and tonumber(y)<=2100 and trim(s:sub(1,p-1))~='' then
@@ -97,7 +103,9 @@ function M.label(data,lang,title,episode_title)
     local name=title or data.title or ''
     if data.episode then
         local marker
-        if lang=='ru' then marker=string.format('Сезон %d, серия %d',data.season or 1,data.episode)
+        if data.unresolved_context then
+            marker=((lang=='ru' and 'Серия ' or lang=='uk' and 'Серія ' or 'Episode ')..data.episode)
+        elseif lang=='ru' then marker=string.format('Сезон %d, серия %d',data.season or 1,data.episode)
         elseif lang=='uk' then marker=string.format('Сезон %d, серія %d',data.season or 1,data.episode)
         elseif lang=='en' then marker=string.format('Season %d, episode %d',data.season or 1,data.episode)
         else marker=string.format('S%02dE%02d',data.season or 1,data.episode) end

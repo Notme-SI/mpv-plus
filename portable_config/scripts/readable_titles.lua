@@ -3,6 +3,9 @@ local root=mp.command_native({'expand-path','~~/'})
 local fmt=dofile(root..'/extensions/title_format.lua')
 local ui=dofile(root..'/extensions/ui_locale.lua')
 local anime=dofile(root..'/extensions/anime_identity.lua')
+local source=dofile(root..'/extensions/media_source.lua')
+local manual=dofile(root..'/extensions/manual_identity.lua')
+local lampa=dofile(root..'/extensions/lampa_context.lua')
 local opts={enabled=true,online=true,tmdb_api_key=''}
 require('mp.options').read_options(opts,'readable_titles')
 local token=opts.tmdb_api_key~='' and opts.tmdb_api_key or dofile(root..'/extensions/tmdb_client.lua')
@@ -13,6 +16,7 @@ local display_details={}
 -- Local fallbacks for anime names when TMDB is unavailable or returns only an English title.
 local local_titles={
     ['dandadan']='Дандадан',
+    ['runner']='Курьер',
 }
 local function local_title(data,lang)
     if lang~='ru' or not data then return nil end
@@ -74,26 +78,34 @@ local function identity()
     local item=list[pos] or {}
     local raw=item.title or mp.get_property('media-title') or mp.get_property('filename','')
     local data=fmt.parse(raw)
+    local corrected=manual.current(raw)
+    if corrected then return corrected,raw end
+    local card=lampa.current(raw)
+    if card then return card,raw end
     local guess=mp.get_property_native('user-data/guessit',{})
     if type(guess)=='table' and guess.input==mp.get_property('path') then
         if data.title=='' and type(guess.title)=='string' then data.title=guess.title end
-        if not data.episode and type(guess.episode)=='number' then data.episode=guess.episode end
-        if not data.season and type(guess.season)=='number' then data.season=guess.season end
+        local valid_coordinates=not (type(guess.season)=='number' and (guess.season<0 or guess.season>99))
+        if valid_coordinates and not data.episode and type(guess.episode)=='number' and guess.episode>=1 and guess.episode<=9999 then data.episode=guess.episode end
+        if valid_coordinates and not data.season and type(guess.season)=='number' then data.season=guess.season end
         if data.episode then data.kind='tv' end
     end
-    return anime.enrich(raw,data),raw
+    local contextual=anime.from_source(raw,source.current())
+    return (contextual.anime or contextual.unresolved_context) and contextual or anime.enrich(raw,data),raw
 end
 local function refresh()
     if not active or not opts.enabled then return end
     local data,raw=identity()
     local lang=ui.language()
-    local signature=raw..'|'..lang..'|'..tostring(data.episode)..'|'..tostring(data.season)
+    local signature=raw..'|'..data.title..'|'..lang..'|'..tostring(data.episode)..'|'..tostring(data.season)..'|'..tostring(data.unresolved_context)
     if signature==current then return end
     generation=generation+1;cancel()
     current,language=signature,lang
     display_details={}
     local gen=generation
-    publish(data)
+    publish(data,data.source=='lampa' and data.title or nil,data.episode_title)
+    if data.unresolved_context then return end
+    if data.source=='lampa' and (data.kind=='movie' or data.episode_title) then return end
     local fallback_title=local_title(data,lang)
     if fallback_title then publish(data,fallback_title) end
     if not opts.online or data.title=='' or not token or token=='' then return end
@@ -115,7 +127,7 @@ local function refresh()
             local title=local_title(data,lang) or details.name or details.title
             publish(data,title)
             if lang=='ru' and title and (local_title(data,lang) or not title:find('[\208\209]')) then anime_fallback() end
-            if data.kind=='tv' and data.episode then
+            if data.kind=='tv' and data.episode and (data.season~=nil or data.source~='lampa') then
                 get(endpoint..'/season/'..(data.tmdb_season or data.season or 1)..'?language='..locale,function(season)
                     if gen~=generation or not season then return end
                     local episodes,episode_title={},nil
@@ -185,6 +197,8 @@ mp.register_event('file-loaded',function() active=true;schedule() end)
 mp.observe_property('user-data/interface-language','string',schedule)
 mp.observe_property('media-title','string',schedule)
 mp.observe_property('user-data/guessit','native',schedule)
+mp.observe_property('user-data/torrserver-context','native',schedule)
+mp.observe_property('user-data/autochapters-manual','native',function() current=nil;schedule() end)
 
 -- Brand the empty window as well as windows that already have a media title.
 mp.set_property('title','${?idle-active:mpv+}${!idle-active:${media-title} - mpv+}')

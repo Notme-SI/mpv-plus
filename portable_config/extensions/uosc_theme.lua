@@ -1,6 +1,7 @@
 -- Local rendering layer. No upstream files or interaction bindings are replaced.
 return function(extend)
     local ui=dofile(mp.command_native({'expand-path','~~/extensions/ui_locale.lua'}))
+    local glass=dofile(mp.command_native({'expand-path','~~/extensions/glass_surface.lua'}))
     local T={mode='glass',marks=true,metadata={badges={}}}
     function T.glass() return T.mode=='glass' end
     mp.observe_property('user-data/player-ui','native',function(_,value)
@@ -15,34 +16,18 @@ return function(extend)
         if request_render then request_render() end
     end)
     function T.panel(ass,box,visibility,radius,hover)
-        local s=state.scale
-        local ax,ay,bx,by=box.ax,box.ay,box.bx,box.by
-        ass:rect(ax,ay,bx,by,{color='c4c4c4',radius=radius,border=0.7*s,border_color='ffffff',
-            opacity={main=(hover and 0.27 or 0.13)*visibility,border=0.27*visibility}})
-        -- A dark translucent base keeps white text readable over bright scenes.
-        ass:rect(ax+0.7*s,ay+0.7*s,bx-0.7*s,by-0.7*s,{color='101010',radius=math.max(0,radius-s),
-            opacity=0.40*visibility})
-        local inset=1.3*s
-        ass:rect(ax+inset,ay+inset,bx-inset,by-inset,{color='ffffff',radius=math.max(0,radius-inset),
-            border=0.45*s,border_color='ffffff',opacity={main=0,border=0.22*visibility},
-            clip=string.format('\\clip(%d,%d,%d,%d)',math.floor(ax),math.floor(ay),math.ceil(bx),math.floor(ay+(by-ay)*0.38))})
+        if T.glass() then glass.panel(ass,{x0=box.ax,y0=box.ay,x1=box.bx,y1=box.by},state.scale,visibility,radius,hover)
+        else ass:rect(box.ax,box.ay,box.bx,box.by,{color='000000',radius=radius,opacity=(hover and .64 or .52)*visibility}) end
     end
     function T.header(ass,box,visibility,playlist)
-        if T.glass() then T.panel(ass,box,visibility,5*state.scale)
-        else ass:rect(box.ax,box.ay,box.bx,box.by,{color=playlist and 'ffffff' or '000000',
-            opacity=visibility*(playlist and 0.88 or config.opacity.title),radius=state.radius}) end
+        T.panel(ass,box,visibility,5*state.scale)
     end
     function T.rail_style(visibility)
         return {color=T.glass() and 'd0d0d0' or '000000',border=0.6*state.scale,border_color='ffffff',
             opacity={main=(T.glass() and 0.24 or 0.48)*visibility,border=(T.glass() and 0.24 or 0.10)*visibility}}
     end
     extend('Button',function(Button)
-        local original=Button.render
         function Button:render()
-            if not T.glass() then
-                local source=self.tooltip;self.tooltip=ui.text(source)
-                local rendered=original(self);self.tooltip=source;return rendered
-            end
             local visibility=self:get_visibility()
             if visibility<=0 then return end
             cursor:zone('primary_click',self,function() self:handle_cursor_click() end)
@@ -52,9 +37,9 @@ return function(extend)
             local r=math.min(self.bx-self.ax,self.by-self.ay)/2-0.7*s
             local box={ax=cx-r,ay=cy-r,bx=cx+r,by=cy+r}
             T.panel(ass,box,visibility,r,hover)
-            if self.active then ass:circle(cx,cy,r,{color='ffffff',opacity=0.63*visibility}) end
+            if self.active then ass:circle(cx,cy,r,{color='ffffff',border=.7*s,border_color='ffffff',opacity={main=0,border=.55*visibility}}) end
             if hover and self.tooltip then ass:tooltip(self,ui.text(self.tooltip)) end
-            local color=self.active and '101010' or 'ffffff'
+            local color='ffffff'
             local icon_clip
             if self.badge then
                 local size=self.font_size*0.6
@@ -66,8 +51,8 @@ return function(extend)
                 ass:txt(bx-width/2,by-height/2,5,self.badge,{size=size,color='111111',opacity=visibility})
                 icon_clip=string.format('\\iclip(%d,%d,%d,%d)',math.floor(bx-width-s),math.floor(by-height-s),math.ceil(bx),math.ceil(by))
             end
-            ass:icon(cx,cy,self.font_size*0.88,self.icon,{color=color,opacity=visibility,border=0,
-                border_color=self.active and 'ffffff' or '111111',clip=icon_clip})
+            ass:icon(cx,cy,self.font_size*0.80,self.icon,{color=color,opacity=visibility,border=0,
+                border_color='111111',clip=icon_clip})
             return ass
         end
     end)
@@ -96,14 +81,8 @@ return function(extend)
                     local size=self.size-margin
                     local box={ax=x+(left and margin or 0),ay=ay+margin,
                         bx=x+(left and margin or 0)+size,by=ay+margin+size}
-                    local foreground=hover and (button.hover_fg or bg) or fg
-                    if T.glass() then
-                        T.panel(ass,box,visibility,size/2,hover)
-                        foreground='ffffff'
-                    else
-                        ass:rect(box.ax,box.ay,box.bx,box.by,{color=hover and (button.hover_bg or fg) or bg,
-                            radius=state.radius,opacity=visibility*(hover and 1 or config.opacity.controls)})
-                    end
+                    local foreground='ffffff'
+                    T.panel(ass,box,visibility,size/2,hover)
                     ass:icon((box.ax+box.bx)/2,(box.ay+box.by)/2,size*0.5,button.icon,
                         {color=foreground,border_color=bg,border=0,opacity=visibility})
                     x=x+self.size
@@ -117,7 +96,7 @@ return function(extend)
                 local box={ax=x,ay=y,bx=x+width,by=by-margin}
                 T.header(ass,box,visibility,true)
                 ass:txt(x+width/2,(box.ay+box.by)/2,5,text,{size=self.font_size,
-                    color=T.glass() and 'ffffff' or '111111',opacity=visibility})
+                    color='ffffff',opacity=visibility})
                 cursor:zone('primary_click',box,function() mp.command('script-binding uosc/playlist') end)
                 x=box.bx+margin
             end

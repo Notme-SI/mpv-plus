@@ -21,7 +21,7 @@
       "remotePath": "autochapters/main.lua",
       "path": "scripts/autochapters/main.lua",
       "version": "3fafabb55cb0168f711acfd6aa5da42fc6e34d8a",
-      "installedHash": "425ca8182aac1a290af9b0a48100f2d6c8eb9c115595fede19ffeaadc2318a51",
+      "installedHash": "b53500c494db3125c05cb56c47ef4dafd80cb53977de209de3e0ed25d36dd0cb",
       "patchFile": "patches/autochapters.json"
     },
     {
@@ -52,7 +52,7 @@
       "remotePath": "scripts/theintrodb.lua",
       "path": "scripts/theintrodb.lua",
       "version": "d88e3dd899e75fc00df31ce9e7072b6891e05135",
-      "installedHash": "7f3d58b6cfdf0a8be4718089c559c10ac02ea7270ae3acdcd69cdfbbc2980b27",
+      "installedHash": "804b8369b744e2a2d6af0a916d19d0bf5d33c7bc0cd1007f35e5959a50a667c1",
       "patchFile": "patches/TheIntroDB.json"
     },
     {
@@ -63,7 +63,7 @@
       "remotePath": "torrserver_loader.lua",
       "path": "vendor/torrserver_loader.lua",
       "version": "405de1ff7528147a768c86f92e88fd38b48fa204",
-      "installedHash": "c3947e36cc3b2d1a3020adbf1309275e09a3f1eee5f407e65b80bf01277c8873",
+      "installedHash": "cd3739c3cbce59dae3be676712422133bfa639acd3dcd6048b0bbf651b020ae4",
       "patchFile": "patches/TorrServer.json"
     },
     {
@@ -155,7 +155,19 @@
       "installedHash": "26eeeff0d4ef9b0e0bb0477410c37c73b0132bd42af31aabe6c0f2086b510cb5"
     }
   ],
-  "buildVersion": "1.0.3",
-  "extensionLayout": 2
+  "buildVersion": "1.1.0",
+  "extensionLayout": 2,
+  "localFiles": {
+    "extensions/lampa_context.lua": "1ba7a38cd4bdd2819beca4019c8710abd4038797b7a945f623a7eaabb91a8bfc",
+    "extensions/uosc_theme.lua": "3fbb98db1485ce611b601b4b3e8bdcd4e2bf789b5da333990f42d3a713d3916b",
+    "extensions/glass_surface.lua": "2e5e076014ea89bf5726c2b0708cc514c95f1ec1c0a9e002029ca9e69b5a42e5",
+    "extensions/uosc_skin.lua": "9c9ef7280c4f1894c056de431c6acd502a5cb024a2b4ceca5e1376e224816c6e",
+    "extensions/overlay_style.lua": "184c2371d6630874a724169de6f18b0beb30fbb3f7320aabef8ba76977097492",
+    "extensions/title_format.lua": "bc4d1108c577d2cdeec21a67b433bff37be48dcab84ef0e6ba109d5d1e980f3e",
+    "extensions/anime_identity.lua": "37e2d852037daac11e35e90c8f7e3c01a182b4684b27ee36f10a533479bcfccb",
+    "extensions/media_source.lua": "c9a4157c06dab697bcaf73ebaca804c2accd7fbfc60191420124f67233f701c1",
+    "scripts/window-state.lua": "88ee076056f523cbfe3f5718415ba159b00e4453e0ad70fb2ca4ef9a596f930a",
+    "scripts/readable_titles.lua": "8f3cf52dbef5489a0cee14c2ede66bf0b4a8c9e81a93a13e87669544cb35286b",
+    "scripts/skip_prompt.lua": "a69838d463ae04e828ebed13641a21383878640827c1ea1a1b272b1cf057fa1e"
+  }
 }
-

@@ -116,13 +116,16 @@ local function curl(url, data, dont_show_osd)
         }
     end
 
+    -- Interactive library requests are bounded; automatic opening never calls curl.
+    table.insert(args,2,'--max-time');table.insert(args,3,'3')
+    table.insert(args,2,'--connect-timeout');table.insert(args,3,'2')
     local result = utils.subprocess({ args = args, capture_stdout = true, capture_stderr = true, cancellable = false })
     if result.status ~= 0 then
         local error_msg = result.stderr or result.error_string or "unknown error"
         if result.stdout and string.len(tostring(result.stdout)) > 0 then
             error_msg = error_msg .. " | stdout: " .. string.sub(tostring(result.stdout), 1, 200)
         end
-        mp.osd_message("Curl error: " .. tostring(error_msg) .. " status code: " .. result.status, 7)
+        if not dont_show_osd then mp.osd_message("Curl error: " .. tostring(error_msg) .. " status code: " .. result.status, 7) end
         return
     end
 
@@ -484,10 +487,12 @@ local function is_torrserver(path)
 end
 
 
-local function connect_external_assets()
+local function connect_external_assets(background)
     if not current_torrent then return end
+    local media=mp.get_property('path','')
+    local torrent=current_torrent
 
-    if options.use_edl then return end
+    if options.use_edl and not background then return end
 
     local main_fileinfo = current_torrent.file_stats[current_torrent.main_files[playing_pos]]
     main_fileinfo.loaded_ext_files = 0
@@ -500,6 +505,7 @@ local function connect_external_assets()
         local request_id
         request_id = mp.command_native_async({ cmd, url_ext, "auto", ext_fileinfo.title }, function(success)
             loadings[request_id] = nil
+            if current_torrent~=torrent or mp.get_property('path','')~=media then return end
 
             if success then
                 main_fileinfo.loaded_ext_files = main_fileinfo.loaded_ext_files + 1
@@ -507,7 +513,7 @@ local function connect_external_assets()
                 main_fileinfo.error_ext_files = main_fileinfo.error_ext_files + 1
             end
 
-            show_torrent_load_info(current_torrent, playing_pos)
+            if not background then show_torrent_load_info(current_torrent, playing_pos) end
         end)
 
         loadings[request_id] = true
@@ -613,7 +619,30 @@ is_torrserver = dofile(mp.command_native({'expand-path','~~/extensions/torrserve
 
 mp.add_hook("on_load", 5, function()
     abort_loadings()
-    load_external_assets()
 end)
+-- Open the supplied video/playlist immediately. Metadata arrives asynchronously
+-- through media_source; attach sidecar tracks without replacing or reloading it.
+local media_loaded,attached_media=false,nil
+local source_context=dofile(mp.command_native({'expand-path','~~/extensions/media_source.lua'}))
+local function connect_from_context()
+    local path=mp.get_property('path','')
+    if not media_loaded or attached_media==path or path:match('^edl://') or not is_torrserver(path) then return end
+    local stream=source_context.stream(path)
+    local context=source_context.current()
+    if not stream or context.pending or context.unavailable or context.hash~=stream.hash or type(context.files)~='table' then return end
+    current_torrent={hash=context.hash,name=context.title,file_stats=context.files}
+    generate_m3u(current_torrent)
+    for i,entry in ipairs(current_torrent.main_files) do
+        if tonumber(current_torrent.file_stats[entry].id)==stream.index then
+            playing_pos=i;attached_media=path
+            connect_external_assets(true)
+            return
+        end
+    end
+end
+mp.register_event('start-file',function()media_loaded=false;attached_media=nil end)
+mp.register_event('file-loaded',function()media_loaded=true;connect_from_context()end)
+mp.register_event('end-file',function()media_loaded=false;attached_media=nil end)
+mp.observe_property('user-data/torrserver-context','native',connect_from_context)
 mp.add_hook("on_preloaded", 5, fix_edl_chapters)
 mp.add_key_binding("Ctrl+t", "torr_open", show_torrents)
