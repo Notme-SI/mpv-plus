@@ -21,6 +21,18 @@ return function(path)
         check(3,47778)
         check(4,51019)
         check(9,nil)
+        -- The source URL contains a clear episode filename while Lampa's
+        -- display title and coordinates incorrectly refer to season one.
+        local media='https://host/Breaking.Bad.S03E02.mkv?token=fixture'
+        os.getenv=function(key)
+            if key=='MPV_PLUS_LAMPA_CONTEXT' then return utils.format_json({version=1,source='lampa',entries={{url=media,identity={
+                title='Во все тяжкие',original_title='Breaking Bad',kind='tv',tmdb_id=1396,season=1,episode=2,
+            }}}}) end
+            return getenv(key)
+        end
+        mp={get_property=function(k,d)if k=='path' then return media end;return d end}
+        local data=dofile(path('extensions/lampa_context.lua')).current('Breaking Bad S01E02')
+        assert(data.season==3 and data.episode==2 and data.lampa_check=='conflict-season',utils.format_json(data))
     end,debug.traceback)
     mp,os.getenv=real,getenv
     assert(ok,err)
