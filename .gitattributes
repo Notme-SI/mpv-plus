@@ -1,3 +1,5 @@
 # Component and local-file hashes describe exact bytes on every platform.
 * -text
 * whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+*.png binary
+*.ico binary
