@@ -4,7 +4,7 @@ local fmt=dofile(folder..'/title_format.lua')
 local anime=dofile(folder..'/anime_identity.lua')
 local source=dofile(folder..'/media_source.lua')
 local M={}
-local payload
+local payload,cached
 local function number(value,min,max)
     value=tonumber(value)
     return value and value==math.floor(value) and value>=(min or 1) and value<=(max or 100000000) and value or nil
@@ -183,6 +183,16 @@ end
 function M.current(raw)
     local path=mp.get_property('path','')
     if path=='' then return end
+    raw=raw or mp.get_property('media-title','')
+    local context=mp.get_property_native and source.current() or {}
+    -- One current result per script: repeated title/skip updates need no new
+    -- catalog scan. Late torrent data and file/title changes invalidate it.
+    local key={path,raw,context.path or '',context.title or '',context.pending==true,context.unavailable==true}
+    if cached then
+        local same=true
+        for i,value in ipairs(key) do if cached.key[i]~=value then same=false;break end end
+        if same then return copy(cached.result) end
+    end
     local matched
     for _,entry in ipairs(read()) do
         if type(entry)=='table' and type(entry.url)=='string' then
@@ -197,12 +207,13 @@ function M.current(raw)
     if data.kind=='movie' then data.season,data.episode=nil,nil end
     data.input=path
     local hint=enrich(copy(data))
-    local context=mp.get_property_native and source.current() or {}
-    local independent=anime.from_source(raw or mp.get_property('media-title',''),context)
+    local independent=anime.from_source(raw,context)
     if not context.path and not context.pending and mp.get_property('path',''):match('^https?://') then
         local physical=physical_path(context)
         if physical~='' then independent=anime.from_source(physical,{path=physical}) end
     end
-    return M.reconcile(independent,hint,context)
+    local result=M.reconcile(independent,hint,context)
+    cached={key=key,result=copy(result)}
+    return result
 end
 return M

@@ -5,22 +5,30 @@
 - 📌 **Закрепление:** штатная булавка включает «Поверх всех окон», сохраняя размер и положение окна.
 - 🎬 **Сериалы и аниме:** исправлено получение сезона из текущей раздачи, сопоставление арок и координат баз таймкодов. Разрешение видео больше не принимается за сезон/серию. Неоднозначный файл не подставляет первый сезон.
 - 🌐 **Открытие потока:** запрос метаданных TorrServer выполняется в фоне и не задерживает открытие видео. Метрики TorrServer и буфера плеера показаны отдельно.
-- 📦 **Поставка:** обновлены руководство, проверки и установщик; личные пароли, история и кэш исключены. Необязательный мост Lampa Desktop поставляется отдельно.
+- 🔎 **Определение видео:** дополнительные сведения сверяются с исходным файлом; повторные проверки используют результат текущего определения.
+
+---
 
 ### 📚 Документация
 
-[Руководство](https://github.com/Notme-SI/mpv-plus/blob/v1.1.0/docs/USAGE.md) · [Изменения](https://github.com/Notme-SI/mpv-plus/blob/v1.1.0/CHANGELOG.md) · [Проверки выпуска](https://github.com/Notme-SI/mpv-plus/blob/v1.1.0/releases/1.1.0/VERIFICATION.md) · [Лицензии](https://github.com/Notme-SI/mpv-plus/blob/v1.1.0/LICENSE)
+- [Руководство: Lampa, TorrServer и настройки](https://github.com/Notme-SI/mpv-plus/blob/main/docs/USAGE.md)
 
-![Версия 1.1.0](https://img.shields.io/badge/mpv%2B-1.1.0-7c3aed?style=flat-square)
+- [История изменений](https://github.com/Notme-SI/mpv-plus/blob/main/CHANGELOG.md) · [Исходники и лицензии](https://github.com/Notme-SI/mpv-plus/blob/main/SOURCES.txt)
+
+<p align="center">
+
+  <img src="https://img.shields.io/badge/mpv%2B-v1.1.0-7c3aed?style=flat-square" alt="mpv+ v1.1.0">
+
+</p>
 
 ### 📥 Скачать
 
 | Система | Установщик | Портативная версия |
 | --- | --- | --- |
-| Windows 10/11 x64 | [Setup x64](https://github.com/Notme-SI/mpv-plus/releases/download/v1.1.0/mpv%2B-1.1.0-Setup.exe) | [Portable x64](https://github.com/Notme-SI/mpv-plus/releases/download/v1.1.0/mpv%2B-1.1.0.zip) |
+| Windows 10/11 x64 | [![Setup x64](https://img.shields.io/badge/Windows-Setup_x64-0078D4?style=flat-square)](https://github.com/Notme-SI/mpv-plus/releases/download/v1.1.0/mpv%2B-1.1.0-Setup.exe) | [![Portable x64](https://img.shields.io/badge/Windows-Portable_x64-2496ED?style=flat-square)](https://github.com/Notme-SI/mpv-plus/releases/download/v1.1.0/mpv%2B-1.1.0.zip) |
 
-Portable: распакуйте всю папку и запустите `mpv+.exe`. Для Lampa выберите соседний `mpv.exe`. Установщик сохраняет личные настройки при обновлении. Если настройки интерфейса перенесены со старой сборки, их можно изменить в меню плеера.
+Установщик — установка с выбором папки и созданием ярлыков. Портативная версия — распакуйте архив целиком.
 
-[Необязательный мост Lampa Desktop 1.6.0-ac3.24](https://github.com/Notme-SI/mpv-plus/releases/download/v1.1.0/lampa-mpv-bridge.zip) нужен для передачи данных карточки; для самостоятельного использования плеера он не требуется. [Плагин Lampa View](https://github.com/Notme-SI/lampa-view) устанавливается отдельно.
+Для Lampa Desktop выбирайте `mpv.exe` из папки mpv+. Самостоятельный запуск — `mpv+.exe`. При повторной установке в прежнюю папку личные настройки сохраняются.
 
-[SHA256SUMS.txt](https://github.com/Notme-SI/mpv-plus/releases/download/v1.1.0/SHA256SUMS.txt) содержит суммы готовых файлов. Встроенный архив Source code содержит исходники, а не готовый плеер.
+Контрольные суммы SHA-256 доступны в блоке **Assets** под именами файлов и в [файле контрольных сумм](https://github.com/Notme-SI/mpv-plus/blob/main/releases/1.1.0/SHA256SUMS.txt). Архивы **Source code** содержат исходники, а не готовый плеер.
