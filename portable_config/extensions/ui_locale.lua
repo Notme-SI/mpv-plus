@@ -102,6 +102,12 @@ function M.menu(data)
                 end
             end
         end
+        -- Name saved personal menu entries by their binding, not an obsolete label.
+        if kind=='menu' then
+            local binding=(type(node.value)=='table' and node.value[1]=='script-binding' and node.value[2])
+                or (type(node.value)=='string' and node.value:match('^script%-binding%s+(.+)$'))
+            if binding=='player_ui/controls_menu' then copy.title=M.text('Панель плеера') end
+        end
         if node.items then
             copy.items={}
             for i,item in ipairs(node.items) do copy.items[i]=walk(item,false) end
@@ -132,7 +138,7 @@ function M.menu(data)
             local target
             for _,item in ipairs(result.items)do if item.items and item.title==M.text('Интерфейс')then target=item;break end end
             if not target then target={title=M.text('Интерфейс'),items={}};result.items[#result.items+1]=target end
-            target.items[#target.items+1]={title=M.text('Управление'),value={'script-binding','player_ui/controls_menu'}}
+            target.items[#target.items+1]={title=M.text('Панель плеера'),value={'script-binding','player_ui/controls_menu'}}
         end
         if not has(result,'player_maintenance/menu') then
             table.insert(result.items,math.max(1,#result.items),{title=M.language()=='en' and 'Maintenance' or 'Обслуживание',value={'script-binding','player_maintenance/menu'}})

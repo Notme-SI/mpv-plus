@@ -42,6 +42,17 @@ assert not (payload / 'portable_config/audio-preferences.json').exists()
 assert not (payload / 'portable_config/subtitle-preferences.json').exists()
 assert not (payload / 'portable_config/window-state.json').exists()
 
+# Check every bundled upstream file, including uosc's multi-file distribution.
+# A clean release must never report its own shipped files as user modifications.
+components=json.loads((payload/'portable_config/maintenance/manifest.json').read_text(encoding='utf-8'))
+for component in components['entries']:
+    scope=payload if component['scope']=='player' else payload/'portable_config'
+    paths={component['path']:component['installedHash'],**component.get('installedFiles',{})}
+    for name,expected in paths.items():
+        target=scope/Path(name.replace('\\','/'))
+        if not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest().lower()!=expected.lower():
+            raise SystemExit('Bundled component differs from its manifest: '+component['name']+' / '+name)
+
 entries = []
 preserved = []
 for relative in sorted(manifest):

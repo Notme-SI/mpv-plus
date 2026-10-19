@@ -28,8 +28,10 @@ return function(path)
         local Element=package.preload['elements/Element']()
         local element=setmetatable({id='controls',render_order=6,min_visibility=0,proximity=0},{__index=Element})
         dofile(path('scripts/player_ui.lua'));assert(element:get_visibility()==0,'Existing automatic hiding remains default')
-        bindings.controls_menu();assert(menus[1].items[1].title=='Всегда показывать управление'and menus[1].items[1].hint=='ВЫКЛ')
+        bindings.controls_menu();assert(menus[1].title=='Панель плеера'and menus[1].items[1].title=='Не скрывать интерфейс'and menus[1].items[1].hint=='ВЫКЛ')
         bindings.toggle_controls();assert(element:get_visibility()==1 and files['script-opts/player_ui.conf']:find('controls_always=yes',1,true),'Pin controls immediately and persist')
+        state.is_idle=true;assert(element:get_visibility()==1,'Keep the panel visible before opening a file')
+        state.is_idle=false
         Elements.curtain.opacity=1;assert(element:get_visibility()==0,'Native menus still cover pinned controls');Elements.curtain.opacity=0
         dofile(path('scripts/player_ui.lua'));assert(element:get_visibility()==1,'Restore persistent controls on next launch')
         bindings.toggle_controls();assert(element:get_visibility()==0,'Turning off restores native proximity hiding')

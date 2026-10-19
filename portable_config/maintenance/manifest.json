@@ -161,7 +161,7 @@
     "extensions/lampa_context.lua": "241ad00e53edeac7ae88a40f87ece64ae35a9937dfb64ce603ccad36ee4cf8fc",
     "extensions/uosc_theme.lua": "3fbb98db1485ce611b601b4b3e8bdcd4e2bf789b5da333990f42d3a713d3916b",
     "extensions/glass_surface.lua": "2e5e076014ea89bf5726c2b0708cc514c95f1ec1c0a9e002029ca9e69b5a42e5",
-    "extensions/uosc_skin.lua": "cdd5f222a38f1a7edf745e8cfad23e95364ce18a05e15afd46dd1c69b863680f",
+    "extensions/uosc_skin.lua": "f2d65c7b8f43b17abca93374373700ba04f6e75c574ff69c98d366c448a93b06",
     "extensions/overlay_style.lua": "184c2371d6630874a724169de6f18b0beb30fbb3f7320aabef8ba76977097492",
     "extensions/title_format.lua": "bc4d1108c577d2cdeec21a67b433bff37be48dcab84ef0e6ba109d5d1e980f3e",
     "extensions/anime_identity.lua": "9d14aed64863f2d5bc0284bfc00f85d8a0c188fc88328bc11e877677247afaf7",
@@ -172,9 +172,9 @@
     "extensions/buffering_panel.lua": "762bae7185b11ad728f7284d351b1b7e406e4f2b695bf767515d3ba9a1a3ddd1",
     "extensions/network_seek.lua": "bfe7834c4dfe2e982dbc26fc6e8c07ea64bdb5c9c5b00feaea929928b734bc79",
     "extensions/network_state.lua": "4d5235e15affbc0310d323099e90ad3b5d4d19c3f0924db25e9302271c916398",
-    "extensions/ui_locale.lua": "f5b86fa3195a9503bd028954cd437f6098b700595cdebb32ea8a69c83c25f5cc",
-    "extensions/interface-translations.json": "83e5bd8046320b64c7291a1dcfb361788730a4ceec6d03079216a34e258bf15e",
+    "extensions/ui_locale.lua": "60e17d0b28d1eaed8c44b13816d351554e0e194fe3b168893cbaa5c56898976a",
+    "extensions/interface-translations.json": "602a3a0a738d12a3b528053e734f12ae4510b7605bbe5c47da05c15ead8dc71a",
     "scripts/network_playback.lua": "cb382fded41ae9777b05422fb16bf13078d96a7967fdb422ca8d87d9d963bd62",
-    "scripts/player_ui.lua": "64e5e2d1643dc657c6d261a4070a55ca55be207e03f2aa4f5e5c342989a21c7d"
+    "scripts/player_ui.lua": "98f9a35d282f1e67f63b0fdfc2cb4a8070f8574d5890cb6c73440c7282d6d805"
   }
 }
