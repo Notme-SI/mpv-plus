@@ -1225,5 +1225,33 @@
   {
     "ru": "Пример: Название 1 1 / Name 1 1",
     "en": "Example: Russian title 1 1 / English title 1 1"
+  },
+  {
+    "ru": "Управление",
+    "en": "Controls"
+  },
+  {
+    "ru": "Всегда показывать управление",
+    "en": "Always show controls"
+  },
+  {
+    "ru": "По текущему источнику",
+    "en": "Adapt to current source"
+  },
+  {
+    "ru": "60 с · 256 МБ вперёд / 128 МБ назад",
+    "en": "60 s · 256 MiB forward / 128 MiB backward"
+  },
+  {
+    "ru": "180 с · 512 МБ вперёд / 256 МБ назад",
+    "en": "180 s · 512 MiB forward / 256 MiB backward"
+  },
+  {
+    "ru": "Кеш TorrServer",
+    "en": "TorrServer cache"
+  },
+  {
+    "ru": "Изменения действуют сразу. Кеш TorrServer и буфер плеера работают отдельно; перемотка вне сохранённого диапазона требует загрузки.",
+    "en": "Changes take effect immediately. TorrServer cache and player buffer are separate; seeking outside cached ranges requires loading."
   }
 ]
