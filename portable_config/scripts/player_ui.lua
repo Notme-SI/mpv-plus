@@ -58,7 +58,7 @@ local function menu_data()
 end
 local function controls_menu()
     return {type='player-controls',title='Панель плеера',keep_open=true,items={
-        {title='Не скрывать интерфейс',hint=prefs.controls_always and 'ВКЛ' or 'ВЫКЛ',
+        {title='Не скрывать нижнюю панель',hint=prefs.controls_always and 'ВКЛ' or 'ВЫКЛ',
          icon=prefs.controls_always and 'toggle_on' or 'toggle_off',value={'script-binding','player_ui/toggle_controls'}},
     }}
 end

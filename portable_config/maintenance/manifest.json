@@ -159,9 +159,9 @@
   "extensionLayout": 2,
   "localFiles": {
     "extensions/lampa_context.lua": "241ad00e53edeac7ae88a40f87ece64ae35a9937dfb64ce603ccad36ee4cf8fc",
-    "extensions/uosc_theme.lua": "3fbb98db1485ce611b601b4b3e8bdcd4e2bf789b5da333990f42d3a713d3916b",
+    "extensions/uosc_theme.lua": "a5b8b8814c6dc07fceebd833ef5d5d396582ea8d3841aefa8c45f69e27ebd506",
     "extensions/glass_surface.lua": "2e5e076014ea89bf5726c2b0708cc514c95f1ec1c0a9e002029ca9e69b5a42e5",
-    "extensions/uosc_skin.lua": "f2d65c7b8f43b17abca93374373700ba04f6e75c574ff69c98d366c448a93b06",
+    "extensions/uosc_skin.lua": "baa42b95f32ab151bbfd4985d286cfe3e81978625bbded385a2072ba356a493c",
     "extensions/overlay_style.lua": "184c2371d6630874a724169de6f18b0beb30fbb3f7320aabef8ba76977097492",
     "extensions/title_format.lua": "bc4d1108c577d2cdeec21a67b433bff37be48dcab84ef0e6ba109d5d1e980f3e",
     "extensions/anime_identity.lua": "9d14aed64863f2d5bc0284bfc00f85d8a0c188fc88328bc11e877677247afaf7",
@@ -173,8 +173,8 @@
     "extensions/network_seek.lua": "bfe7834c4dfe2e982dbc26fc6e8c07ea64bdb5c9c5b00feaea929928b734bc79",
     "extensions/network_state.lua": "4d5235e15affbc0310d323099e90ad3b5d4d19c3f0924db25e9302271c916398",
     "extensions/ui_locale.lua": "60e17d0b28d1eaed8c44b13816d351554e0e194fe3b168893cbaa5c56898976a",
-    "extensions/interface-translations.json": "602a3a0a738d12a3b528053e734f12ae4510b7605bbe5c47da05c15ead8dc71a",
+    "extensions/interface-translations.json": "de5bcd452063722d0d5c79d3fdc82b741ca87e43524aa30373798029861f9e5f",
     "scripts/network_playback.lua": "cb382fded41ae9777b05422fb16bf13078d96a7967fdb422ca8d87d9d963bd62",
-    "scripts/player_ui.lua": "98f9a35d282f1e67f63b0fdfc2cb4a8070f8574d5890cb6c73440c7282d6d805"
+    "scripts/player_ui.lua": "e84e421e38f216102c1be506c28ca1cb1afd3e47df4f0ebfd70f747c6a5f4daa"
   }
 }
