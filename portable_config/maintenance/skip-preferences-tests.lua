@@ -17,13 +17,14 @@ return function(path)
     local mock={get_property=get,get_property_native=get,get_property_number=get,get_property_bool=get,
         set_property=set,set_property_native=set,set_property_number=set,
         command_native=function(a) return path(a[2]:gsub('^~~/','')) end,
-        commandv=function(...) commands[#commands+1]={...} end,
+        commandv=function(...) local args={...};commands[#commands+1]=args;if args[1]=='seek'then props['time-pos']=tonumber(args[2])end end,
         observe_property=function(k,_,fn) observers[k]=fn end,
         register_event=function(k,fn) events[k]=fn end,
         register_script_message=function(k,fn) messages[k]=fn end,
         add_key_binding=noop,remove_key_binding=noop,osd_message=function(text,seconds)osd[#osd+1]={text=text,seconds=seconds}end,
         add_timeout=timer,add_periodic_timer=timer,get_time=function() return now end,
         get_opt=function(k) if k=='theintrodb-debug' then return 'yes' end end,
+        create_osd_overlay=function()return {update=noop,remove=noop}end,
         msg={log=noop,warn=noop,info=noop},get_osd_size=function() return 1280,720 end}
     local ok,err=xpcall(function()
         mp=mock
@@ -56,6 +57,7 @@ return function(path)
         dofile(path('scripts/theintrodb.lua'))
         local state=__tidb_debug()
         for _,kind in ipairs({'intro','recap','credits','preview'}) do
+            props['time-pos']=40
             state.segments={{kind=kind,start=35,['end']=125}};state.seek_grace_until=0
             commands={}
             for _,t in ipairs(timers) do if t.active then t.fn() end end
@@ -68,20 +70,27 @@ return function(path)
             for _,c in ipairs(commands) do assert(c[1]~='seek','Preview must last a full second')end
             now=now+.11
             for _,t in ipairs(timers) do if t.active then t.fn() end end
+            now=now+.13
+            for _,t in ipairs(timers) do if t.active then t.fn() end end
             local sought=false
             for _,c in ipairs(commands) do if c[1]=='seek' then sought=true;assert(c[2]=='125') end end
             assert(sought==(kind~='preview'),'Default skip selection: '..kind)
             if sought then assert(osd[#osd].seconds==3,'Skip result must stay visible for 3 seconds')end
+            now=now+.025;for _,t in ipairs(timers)do if t.active then t.fn()end end
+            now=now+.2;for _,t in ipairs(timers)do if t.active then t.fn()end end
         end
         messages['toggle-skip-preference']('intro')
         assert(files['script-opts/skip_preferences.conf']:find('intro=no',1,true),'Persist separate type selection')
         messages['toggle-skip-preference']('enabled')
-        state.segments={{kind='credits',start=35,['end']=125}};state.seek_grace_until=0;commands={}
+        props['time-pos']=40;state.segments={{kind='credits',start=35,['end']=125}};state.seek_grace_until=0;commands={}
         for _,t in ipairs(timers) do if t.active then t.fn() end end
         for _,c in ipairs(commands) do assert(c[1]~='seek','Master switch stops automatic skipping') end
         commands={};messages['skip-active']('intro','35');assert(#commands==0,'Reject a stale prompt')
         messages['skip-active']('credits','35')
-        assert(commands[1][1]=='seek' and commands[1][2]=='125','Manual skip works with automatic skipping off')
+        now=now+.13;for _,t in ipairs(timers)do if t.active then t.fn()end end
+        local manual_seek
+        for _,command in ipairs(commands)do if command[1]=='seek'then manual_seek=command end end
+        assert(manual_seek and manual_seek[2]=='125','Manual skip works with automatic skipping off')
         local hash=string.rep('a',40)
         props.path='http://localhost:8090/stream?link='..hash..'&index=2&play'
         utils.subprocess=function() return {status=0,stdout=utils.format_json({hash=hash,name='Kimetsu no Yaiba',

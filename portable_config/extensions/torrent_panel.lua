@@ -90,11 +90,15 @@ function M.new(ui)
     local value,timer
     local function hide()
         value=nil;overlay:remove()
+        mp.set_property_native('user-data/torrserver-loading',{})
         if timer then timer:kill();timer=nil end
     end
     local function draw()
         local w,h=mp.get_osd_size()
         if not value or w<=0 or h<=0 then overlay:remove();return end
+        -- The network extension owns a single full panel while this stream is
+        -- open. Keep the standalone loader panel as a fallback before launch.
+        if mp.get_property_native('user-data/network-buffering',{}).managed then overlay:remove();return end
         overlay.res_x=w;overlay.res_y=h
         overlay.data=M.render(value,ui.language(),w,h,{
             seconds=mp.get_property_number('demuxer-cache-duration'),
@@ -103,6 +107,7 @@ function M.new(ui)
     end
     mp.observe_property('osd-dimensions','native',draw)
     mp.observe_property('user-data/interface-language','native',draw)
+    mp.observe_property('user-data/network-buffering','native',draw)
     mp.register_event('end-file',hide)
     mp.register_event('shutdown',hide)
     return {
@@ -110,6 +115,9 @@ function M.new(ui)
             local parsed=M.parse(message)
             if not parsed then return false end
             value=parsed;draw()
+            local shared={media=mp.get_property('path',''),time=mp.get_time()}
+            for k,v in pairs(parsed)do shared[k]=v end
+            mp.set_property_native('user-data/torrserver-loading',shared)
             -- Loader refreshes every 0.5s only while buffering.
             if timer then timer:kill() end
             timer=mp.add_timeout(1.2,hide)

@@ -18,7 +18,7 @@ return function(path)
         add_timeout=function(d,fn)return timer(d,fn,false)end,add_periodic_timer=function(d,fn)return timer(d,fn,true)end,
         get_time=function()return now end,get_opt=function(k)if k=='theintrodb-debug'then return 'yes'end end,
         add_key_binding=noop,add_forced_key_binding=noop,remove_key_binding=noop,register_script_message=noop,osd_message=noop,
-        create_osd_overlay=function()return overlay end,get_osd_size=function()return 1280,720 end,
+        create_osd_overlay=function()if not overlay.created then overlay.created=true;return overlay end;return {update=noop,remove=noop}end,get_osd_size=function()return 1280,720 end,
         register_event=function(k,fn)events[k]=events[k] or {};table.insert(events[k],fn)end,msg={log=noop,warn=noop,info=noop}}
     local function advance(seconds)
         for i=1,math.floor(seconds/.025+.5)do
@@ -34,10 +34,11 @@ return function(path)
         io.open=function(name,mode)if name:sub(1,7)=='memory:'then return nil end;return open(name,mode)end
         dofile(path('scripts/theintrodb.lua'));dofile(path('scripts/skip_prompt.lua'))
         local state=__tidb_debug();state.segments={{kind='recap',start=0,['end']=40},{kind='intro',start=40,['end']=130}}
-        advance(1.15);assert(#seeks==1 and seeks[1]==40,'First recap must skip')
-        assert(overlay.data:find('Автопропуск: Ранее в сериале',1,true) and overlay.data:find('Автопропуск: Заставки',1,true),'Result and next cue must render together')
-        advance(1.65);assert(#seeks==2 and seeks[2]==130,'Adjacent opening must skip despite the previous notice')
-        advance(3.2);assert(#seeks==2,'No repeated seeks after both segments')
+        advance(1.3);assert(#seeks==1 and seeks[1]==40,'First recap must skip after its preview and fade')
+        assert(overlay.data:find('Автопропуск: Заставка',1,true) and not overlay.data:find('Ранее в сериале',1,true),'Only the next active action renders, without stacking the old result')
+        advance(1.8);assert(#seeks==2 and seeks[2]==130,'Adjacent opening must skip despite the previous notice')
+        assert(overlay.data:find('Пропущено: Ранее в сериале · Заставка',1,true),'Consecutive results combine into one final panel')
+        advance(3.5);assert(#seeks==2 and not props['user-data/skip-prompt-visible'],'No repeated seeks or stale panels after both segments')
     end,debug.traceback)
     mp=real;io.open=open;__tidb_debug=nil;for key,value in pairs(saved)do package.loaded[key]=value end;assert(ok,err)
 end

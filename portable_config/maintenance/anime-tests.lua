@@ -118,7 +118,7 @@ return function(path)
         observers['user-data/skip-prompt'](nil,{})
         observers['time-pos']()
         assert(props['user-data/skip-prompt-visible'],'Normal updates must not erase the skip confirmation')
-        assert(overlay.data:find('Автопропуск:',1,true),'Show the cause of the seek')
+        assert(overlay.data:find('Пропущено:',1,true),'Show the completed skip separately from an upcoming action')
         timer.fn();assert(not props['user-data/skip-prompt-visible'],'Confirmation expires')
     end,debug.traceback)
     mp=real;package.loaded['mpv-build/ui_locale']=saved
