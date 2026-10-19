@@ -1253,5 +1253,13 @@
   {
     "ru": "Изменения действуют сразу. Кеш TorrServer и буфер плеера работают отдельно; перемотка вне сохранённого диапазона требует загрузки.",
     "en": "Changes take effect immediately. TorrServer cache and player buffer are separate; seeking outside cached ranges requires loading."
+  },
+  {
+    "en": "Show buffer summary",
+    "ru": "Показывать строку буфера"
+  },
+  {
+    "en": "Show statistics",
+    "ru": "Показывать статистику"
   }
 ]

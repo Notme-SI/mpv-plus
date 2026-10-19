@@ -70,6 +70,18 @@ return function(path)
     assert(#valid==2 and valid[1].start==35 and valid[1]['end']==150 and valid[2]['end']==1440,
         'Reject incomplete or out-of-range times, deduplicate, permit an explicit final preview')
     assert(not skips.validate('intro',{start_ms=0/0,end_ms=90000},1440),'Reject NaN')
+    local opening=skips.flatten({recap={{start_ms=0,end_ms=60000}},intro={{start_ms=60000,end_ms=150000}},
+        credits={{start_ms=150000,end_ms=240000},{start_ms=1300000,end_ms=1390000}}},1440)
+    assert(#opening==3 and opening[3].start==1300,'An early online ED must not cause a third skip after recap and OP')
+    assert(skips.from_chapters({{time=0,title='Credits'},{time=90,title='Story'}},1440,fmt.normalize).credits,
+        'Embedded opening credits are preserved by the chapter parser')
+    assert(skips.validate('credits',{start_ms=150000,end_ms=240000,source='chapters'},1440),
+        'Explicit embedded credits are preserved even in unusual programme structures')
+    local conflict=skips.flatten({intro={{start_ms=100000,end_ms=190000,source='chapters'}},
+        recap={{start_ms=110000,end_ms=200000}}},1440)
+    assert(#conflict==1 and conflict[1].kind=='intro','Matching chapters outrank overlapping database labels')
+    assert(#skips.flatten({intro={{start_ms=100000,end_ms=190000}},recap={{start_ms=110000,end_ms=200000}}},1440)==0,
+        'Ambiguous cross-kind overlaps must not seek past programme content')
     local function result(length,start,finish)
         return {skipType='op',episodeLength=length,interval={startTime=start,endTime=finish}}
     end

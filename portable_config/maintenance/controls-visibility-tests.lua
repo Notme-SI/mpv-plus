@@ -16,7 +16,10 @@ return function(path)
         mp=mock
         package.loaded['mpv-build/ui_locale']={install_messages=noop,text=function(v)return v end}
         package.loaded['mpv-build/user_settings']={path=function(name)return 'memory:'..name end,options=function(values,name)
-            if name=='player_ui'then values.controls_always=(files['script-opts/player_ui.conf']or''):find('controls_always=yes',1,true)~=nil end
+            if name=='player_ui'then for key in pairs(values) do
+                local value=(files['script-opts/player_ui.conf']or''):match(key..'=([^\n]+)')
+                if value=='yes' or value=='no' then values[key]=value=='yes' end
+            end end
         end}
         io.open=function(name,mode)
             if name:sub(1,7)~='memory:'then return open(name,mode)end;name=name:sub(8)
@@ -29,6 +32,12 @@ return function(path)
         local element=setmetatable({id='controls',render_order=6,min_visibility=0,proximity=0},{__index=Element})
         dofile(path('scripts/player_ui.lua'));assert(element:get_visibility()==0,'Existing automatic hiding remains default')
         bindings.controls_menu();assert(menus[1].title=='Панель плеера'and menus[1].items[1].title=='Не скрывать нижнюю панель'and menus[1].items[1].hint=='ВЫКЛ')
+        assert(props['user-data/player-ui/buffer-visible'] and props['user-data/player-ui/statistics-visible'])
+        bindings.toggle_buffer();assert(not props['user-data/player-ui/buffer-visible'] and props['user-data/player-ui/statistics-visible'])
+        bindings.toggle_statistics();assert(not props['user-data/player-ui/buffer-visible'] and not props['user-data/player-ui/statistics-visible'])
+        bindings.toggle_buffer();assert(props['user-data/player-ui/buffer-visible'] and not props['user-data/player-ui/statistics-visible'])
+        dofile(path('scripts/player_ui.lua'));assert(props['user-data/player-ui/buffer-visible'] and not props['user-data/player-ui/statistics-visible'],'Independent preferences survive restart')
+        bindings.toggle_statistics()
         bindings.toggle_controls();assert(element:get_visibility()==1 and files['script-opts/player_ui.conf']:find('controls_always=yes',1,true),'Pin controls immediately and persist')
         state.is_idle=true;assert(element:get_visibility()==1,'Keep the panel visible before opening a file')
         state.is_idle=false

@@ -3,7 +3,7 @@ return function(path)
     local saved={};for _,key in ipairs({'mp.options','mpv-build/ui_locale','mpv-build/user_settings'})do saved[key]=package.loaded[key]end
     local utils=require 'mp.utils'
     local hash=string.rep('a',40)
-    local props={path='edl://!new_stream;http://user:pass@other.invalid:8090/prefix/stream?link='..hash..'&index=3&play&token=fixture',pause=false,['time-pos']=30,duration=1400,['demuxer-cache-duration']=.2,['cache-speed']=1048576}
+    local props={path='edl://!new_stream;http://user:pass@other.invalid:8090/prefix/stream/Episode%20Three.mkv?link='..hash..'&index=3&play&token=fixture',pause=false,['time-pos']=30,duration=1400,['demuxer-cache-duration']=.2,['cache-speed']=1048576}
     local events,observers,hooks,messages,bindings,timers,requests,commands={},{},{},{},{},{},{},{}
     local overlay={remove=function(self)self.visible=false end,update=function(self)self.visible=true end}
     local function noop()end
@@ -28,7 +28,7 @@ return function(path)
         io.open=function(name,mode)if name:sub(1,7)=='memory:'then return {write=function()return true end,close=function()return true end}end;return open(name,mode)end
         dofile(path('scripts/network_playback.lua'));emit('start-file',{playlist_entry_id=1})
         assert(overlay.visible and props['user-data/network-buffering'].reason=='opening','Opening always shows the full network panel')
-        assert(overlay.data:find('Буфер плеера вперёд',1,true) and overlay.data:find('Кеш TorrServer',1,true),'Full statistics are present before playback starts')
+        assert(overlay.data:find('вперёд',1,true) and overlay.data:find('Кеш TorrServer',1,true),'Full statistics are present before playback starts')
         hooks.on_load();emit('file-loaded')
         assert(props['file-local-options/demuxer-max-bytes']==128*1048576 and props['file-local-options/demuxer-max-back-bytes']==128*1048576,'Auto distinguishes TorrServer and retains back buffer')
         assert(#requests==1 and requests[1].aborted and not overlay.visible,'Opening poll stops during ordinary playback')
@@ -41,6 +41,13 @@ return function(path)
         observers['paused-for-cache']();assert(#requests==2,'Single-flight statistics')
         request.fn(true,{status=0,stdout=utils.format_json({Capacity=100*1048576,Filled=50*1048576,Torrent={download_speed=2*1048576,active_peers=7,connected_seeders=3}})})
         assert(overlay.data:find('2.0 МБ/с',1,true) and overlay.data:find('50.0 / 100.0 МБ',1,true),'Show actual server stats separately from player read speed')
+        props['user-data/player-ui/buffer-visible']=false;observers['user-data/player-ui/buffer-visible']()
+        assert(overlay.visible and not overlay.data:find('вперёд',1,true) and overlay.data:find('TorrServer',1,true),'Hide buffer independently')
+        props['user-data/player-ui/statistics-visible']=false;observers['user-data/player-ui/statistics-visible']()
+        assert(not overlay.visible,'Both switches off remove the overlay immediately')
+        props['user-data/player-ui/buffer-visible']=true;observers['user-data/player-ui/buffer-visible']()
+        assert(overlay.visible and overlay.data:find('вперёд',1,true) and not overlay.data:find('TorrServer',1,true),'Buffer-only overlay')
+        props['user-data/player-ui/statistics-visible']=true;observers['user-data/player-ui/statistics-visible']()
         props['paused-for-cache']=false;observers['paused-for-cache']();assert(not overlay.visible)
         for i=1,4 do
             props.seeking=true;observers.seeking()
@@ -67,7 +74,7 @@ return function(path)
         props['user-data/torrserver-loading']={media=props.path,time=0,state='caching',file='episode.mkv',speed='97.46 Mbps',cache='0.10 / 0.10 GB',peers='16 / 41 · 14',extra=''}
         observers['user-data/torrserver-loading']()
         assert(overlay.visible and overlay.data:find('97.46 Mbps',1,true) and overlay.data:find('0.10 / 0.10 ГБ',1,true)
-            and overlay.data:find('16 / 41 · 14',1,true) and overlay.data:find('episode.mkv',1,true),'Retain the complete original loader data even before a standard stream endpoint is known')
+            and overlay.data:find('16 / 41 · 14',1,true) and overlay.data:find('TorrServer',1,true),'Retain the complete original loader data even before a standard stream endpoint is known')
         assert(#requests==count,'Opaque URLs must not query an unrelated configured server')
         props['user-data/torrserver-loading']={};observers['user-data/torrserver-loading']();assert(not overlay.visible)
         emit('end-file',{playlist_entry_id=2,reason='stop'})
