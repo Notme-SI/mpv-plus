@@ -74,11 +74,14 @@ return function(path)
         props['playlist-pos']=1;observers['playlist-pos']();local count=#commands;tick()
         assert(#commands==count and continued==6 and not bindings['cancel-reconnect'])
         -- Cancelling an on-demand diagnostic rejects even a late subprocess response.
-        props['playlist-pos']=0;bindings.menu();assert(#requests==1)
-        observers['user-data/uosc/menu/type'](nil,nil);assert(requests[1].aborted)
-        requests[1].fn(true,{status=0,stdout='{"download_speed":123}'})
-        bindings.menu();assert(#requests==2)
-        emit('start-file',{playlist_entry_id=2});assert(requests[2].aborted)
+        local before=#requests
+        props['playlist-pos']=0;bindings.menu();assert(#requests==before+1)
+        local first=requests[#requests]
+        observers['user-data/uosc/menu/type'](nil,nil);assert(first.aborted)
+        first.fn(true,{status=0,stdout='{"download_speed":123}'})
+        bindings.menu();assert(#requests==before+2)
+        local second=requests[#requests]
+        emit('start-file',{playlist_entry_id=2});assert(second.aborted)
     end,debug.traceback)
     mp=real;package.loaded['mp.options']=old_options;package.loaded['mpv-build/ui_locale']=old_ui
     assert(ok,err)

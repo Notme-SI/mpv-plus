@@ -48,6 +48,7 @@ local function tests()
     dofile(path('maintenance/torrent-panel-tests.lua'))(path)
     dofile(path('maintenance/skip-preferences-tests.lua'))(path)
     dofile(path('maintenance/skip-notice-tests.lua'))(path)
+    dofile(path('maintenance/skip-transition-tests.lua'))(path)
     dofile(path('maintenance/consecutive-skip-tests.lua'))(path)
 
     local torrent=dofile(path('extensions/torrserver.lua'))

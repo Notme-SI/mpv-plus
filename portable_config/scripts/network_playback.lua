@@ -130,14 +130,29 @@ local function stop_stat()
     if request then mp.abort_async_command(request);request=nil end
     stat={}
 end
-local function buffering() return session and session.active and policy.network(mp.get_property('path','')) and mp.get_property_bool('paused-for-cache',false) end
+local function loading_reason()
+    if not session or not session.active or not policy.network(mp.get_property('path','')) then return end
+    if not session.loaded then return 'opening' end
+    local loader=mp.get_property_native('user-data/torrserver-loading',{})
+    if loader.media==mp.get_property('path','') and type(loader.time)=='number' and mp.get_time()-loader.time<1.3 then
+        if loader.state=='opening' or loader.state=='connecting external files' then return 'opening' end
+        if loader.state=='caching' then return 'buffering' end
+    end
+    if mp.get_property_bool('seeking',false) then return 'seeking' end
+    if mp.get_property_bool('paused-for-cache',false) then return 'buffering' end
+    -- uosc can show its spinner for core-idle without paused-for-cache.
+    local progress=mp.get_property_number('cache-buffering-state')
+    if mp.get_property_bool('core-idle',false) and not mp.get_property_bool('eof-reached',false)
+        and (not mp.get_property_bool('pause',false) or progress and progress<100) then return 'buffering' end
+end
+local function buffering() return loading_reason()~=nil end
 local draw_buffering
 local function poll_stat()
     if not (diagnostics or buffering()) or request then return end
     local stream=source.stream(mp.get_property('path',''))
     if not stream then stat={};return end
     local gen=request_generation
-    request=mp.command_native_async({name='subprocess',capture_stdout=true,capture_stderr=true,args={
+    request=mp.command_native_async({name='subprocess',playback_only=false,capture_stdout=true,capture_stderr=true,args={
         'curl','--silent','--fail','--connect-timeout','2','--max-time','3','--max-filesize','1048576',
         '-H','Content-Type: application/json','--data',utils.format_json({action='get',hash=stream.hash}),network.request(stream)}},function(ok,result)
         if gen~=request_generation then return end
@@ -187,8 +202,17 @@ end
 local function update_menu() if diagnostics then mp.commandv('script-message-to','uosc','update-menu',utils.format_json(menu())) end end
 local panel=dofile(root..'/extensions/buffering_panel.lua').new(ui)
 draw_buffering=function()
-    local data={active=buffering()==true,torrent=source.stream(mp.get_property('path',''))~=nil,stat=stat,
-        seconds=mp.get_property_number('demuxer-cache-duration'),speed=mp.get_property_number('cache-speed')}
+    local cache=mp.get_property_native('demuxer-cache-state',{})
+    local reason=loading_reason()
+    local path=mp.get_property('path','')
+    local loader=mp.get_property_native('user-data/torrserver-loading',{})
+    if loader.media~=path or type(loader.time)~='number' or mp.get_time()-loader.time>=1.3 then loader=nil end
+    local data={active=reason~=nil,managed=session and session.active and policy.network(path) or false,
+        reason=reason,torrent=source.stream(path)~=nil or loader~=nil,stat=stat,loader=loader,
+        seconds=mp.get_property_number('demuxer-cache-duration'),speed=mp.get_property_number('cache-speed'),
+        forward_bytes=cache['fw-bytes'],back_bytes=cache['total-bytes'] and cache['fw-bytes'] and math.max(0,cache['total-bytes']-cache['fw-bytes']),
+        progress=mp.get_property_number('cache-buffering-state'),dropped=mp.get_property_number('frame-drop-count'),
+        avsync=mp.get_property_number('avsync'),profile=cache_profile}
     mp.set_property_native('user-data/network-buffering',data)
     if not data.active then panel.hide();return end
     panel.draw(data)
@@ -203,7 +227,7 @@ local function refresh_telemetry()
         telemetry()
     else
         if telemetry_timer then telemetry_timer:kill();telemetry_timer=nil end
-        stop_stat();panel.hide()
+        stop_stat();draw_buffering()
     end
 end
 mp.add_key_binding(nil,'menu',function()
@@ -218,7 +242,13 @@ mp.observe_property('user-data/uosc/menu/type','string',function(_,kind)
     diagnostics=kind=='network-playback'
     refresh_telemetry()
 end)
-mp.observe_property('paused-for-cache','bool',refresh_telemetry)
+for _,property in ipairs({'paused-for-cache','seeking','core-idle','cache-buffering-state','pause','eof-reached'})do
+    mp.observe_property(property,'native',refresh_telemetry)
+end
+mp.observe_property('osd-dimensions','native',function()draw_buffering()end)
+mp.observe_property('user-data/torrserver-loading','native',refresh_telemetry)
+mp.register_event('file-loaded',refresh_telemetry)
+mp.register_event('playback-restart',refresh_telemetry)
 mp.register_event('start-file',function()stop_stat();refresh_telemetry()end)
 mp.register_event('end-file',function()stop_stat();refresh_telemetry()end)
 mp.register_event('shutdown',function()if telemetry_timer then telemetry_timer:kill()end;panel.hide()end)

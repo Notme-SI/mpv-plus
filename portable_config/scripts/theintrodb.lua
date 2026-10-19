@@ -82,7 +82,7 @@ local lampa=dofile(config_root..'/extensions/lampa_context.lua')
 local skip_prefs={enabled=true,intro=true,recap=true,credits=true,preview=false}
 settings.options(skip_prefs,'skip_preferences')
 local ru_kind = {intro="Заставка", recap="Ранее в сериале", credits="Титры", preview="Анонс"}
-local auto_kind = {intro="Заставки", recap="Ранее в сериале", credits="Титр", preview="Анонса"}
+local auto_kind = {intro="Заставка", recap="Ранее в сериале", credits="Титры", preview="Анонс"}
 local tidb = {
     media = nil,          -- parsed API response
     segments = {},        -- flat list: {kind=, start=, end=} in seconds
@@ -430,6 +430,7 @@ local function duration()
     return mp.get_property_number("duration") or 0
 end
 
+local skip_transition
 local function do_skip(seg, via_ui, automatic)
     if seg == nil then return false end
     local target = seg["end"]
@@ -451,7 +452,8 @@ local function do_skip(seg, via_ui, automatic)
         mp.set_property_native('user-data/skip-prompt',{clear=true})
     end
     mp.set_property("pause", "no")
-    mp.commandv("seek", tostring(target), "absolute", "exact")
+    if not skip_transition then skip_transition=dofile(config_root..'/extensions/skip_transition.lua').new() end
+    skip_transition.seek(target)
     tidb.seek_grace_until = mp.get_time() + 1.5
     if automatic and o.show_osd == "yes" then
         local label = ru_kind[seg.kind] or seg.kind
