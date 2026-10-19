@@ -1227,12 +1227,12 @@
     "en": "Example: Russian title 1 1 / English title 1 1"
   },
   {
-    "ru": "Управление",
-    "en": "Controls"
+    "ru": "Панель плеера",
+    "en": "Player panel"
   },
   {
-    "ru": "Всегда показывать управление",
-    "en": "Always show controls"
+    "ru": "Не скрывать интерфейс",
+    "en": "Keep interface visible"
   },
   {
     "ru": "По текущему источнику",

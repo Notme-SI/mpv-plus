@@ -84,19 +84,39 @@ return function(script_directory)
     end)
     local controls_always=false
     mp.observe_property('user-data/player-ui/controls-always','bool',function(_,value)
-        controls_always=value==true;if request_render then request_render() end
+        controls_always=value==true
+        if Elements and Elements.timeline then Elements.timeline:decide_enabled() end
+        if request_render then request_render() end
     end)
     extend('Element',function(Element)
         local persistent=Element.is_persistent
         local controls={controls=true,timeline=true,top_bar=true,volume=true,speed=true}
         function Element:is_persistent()
-            if controls_always and not state.is_idle and controls[self.id] then return true end
+            if controls_always and (controls[self.id] or self.anchor_id=='controls') then return true end
             return persistent(self)
+        end
+    end)
+    extend('Controls',function(Controls)
+        local visibility=Controls.get_visibility
+        function Controls:get_visibility()
+            -- Native timeline hover hides its anchor, including every button.
+            -- Pinned panels keep that anchor visible and still respect menus.
+            if controls_always then return require('elements/Element').get_visibility(self) end
+            return visibility(self)
         end
     end)
     local theme=dofile(mp.command_native({'expand-path','~~/extensions/uosc_theme.lua'}))(extend)
     extend('Timeline', function(Timeline)
         dofile(mp.command_native({'expand-path','~~/extensions/network_seek.lua'}))(Timeline)
+        local decide_enabled=Timeline.decide_enabled
+        function Timeline:decide_enabled()
+            if controls_always and state.is_idle and not self.obstructed then
+                local previous=self.enabled
+                self.enabled=true
+                if not previous then Elements:trigger('timeline_enabled',true) end
+            else decide_enabled(self) end
+        end
+        function Timeline:on_prop_is_idle() self:decide_enabled() end
         function Timeline:rail()
             local s = state.scale
             local opts = {size = self.font_size}
@@ -119,7 +139,19 @@ return function(script_directory)
         function Timeline:render()
             local visibility = self:get_visibility()
             self.is_hovered = self.proximity_raw <= 0
-            if self.size == 0 or visibility <= 0 or not state.duration or not state.time then
+            if controls_always and state.is_idle and self.size>0 and visibility>0 then
+                self.is_hovered=false;self:clear_thumbnail()
+                local ass,s=assdraw.ass_new(),state.scale
+                local ax,bx,cy=self:rail()
+                local style=theme.rail_style(visibility*0.45);style.radius=2.5*s
+                ass:rect(ax,cy-2.5*s,bx,cy+2.5*s,style)
+                for _,side in ipairs({{self.ax+10*s,4},{self.bx-10*s,6}})do
+                    ass:txt(side[1],cy,side[2],'00:00',{size=self.font_size,color='ffffff',opacity=visibility*0.45})
+                end
+                -- No seek handlers until a file with a duration is loaded.
+                return ass
+            end
+            if self.size == 0 or visibility <= 0 or not state.duration or state.duration<=0 or not state.time then
                 self.is_hovered = false
                 self:clear_thumbnail()
                 return
@@ -223,6 +255,11 @@ return function(script_directory)
     end)
 
     extend('Speed', function(Speed)
+        local visibility=Speed.get_visibility
+        function Speed:get_visibility()
+            if controls_always then return require('elements/Element').get_visibility(self) end
+            return visibility(self)
+        end
         function Speed:render()
             local opacity=self.dragging and 1 or self:get_visibility()
             if opacity<=0 then return end
@@ -256,6 +293,13 @@ return function(script_directory)
     end)
 
     extend('Volume', function(Volume)
+        local visibility=Volume.get_visibility
+        function Volume:get_visibility()
+            if controls_always and (state.is_idle or state.has_audio) then
+                return require('elements/Element').get_visibility(self)
+            end
+            return visibility(self)
+        end
         local init=Volume.init
         function Volume:init(...)
             init(self,...)
