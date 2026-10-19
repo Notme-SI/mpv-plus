@@ -4,14 +4,14 @@ ui.install_messages()
 local utils = require 'mp.utils'
 local config_path = dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua').path('script-opts/uosc.conf')
 local style, cache = 'bar', true
-local prefs={icon_style='glass',chapter_marks=true}
+local prefs={icon_style='glass',chapter_marks=true,controls_always=false}
 dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua').options(prefs,'player_ui')
 if prefs.icon_style~='plain' then prefs.icon_style='glass' end
 local prefs_path=dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua').path('script-opts/player_ui.conf')
 local function save_prefs()
     local f=io.open(prefs_path,'wb')
     if not f then mp.osd_message('Не удалось сохранить оформление',3);return end
-    local ok=f:write('icon_style='..prefs.icon_style..'\nchapter_marks='..(prefs.chapter_marks and 'yes' or 'no')..'\n')
+    local ok=f:write('icon_style='..prefs.icon_style..'\nchapter_marks='..(prefs.chapter_marks and 'yes' or 'no')..'\ncontrols_always='..(prefs.controls_always and 'yes' or 'no')..'\n')
     if not f:close() or not ok then mp.osd_message('Не удалось сохранить оформление',3) end
 end
 local function icons_menu()
@@ -56,13 +56,21 @@ local function menu_data()
         footnote='Индикация загрузки видна, когда источник сообщает диапазоны буфера.',
     }
 end
+local function controls_menu()
+    return {type='player-controls',title='Управление',keep_open=true,items={
+        {title='Всегда показывать управление',hint=prefs.controls_always and 'ВКЛ' or 'ВЫКЛ',
+         icon=prefs.controls_always and 'toggle_on' or 'toggle_off',value={'script-binding','player_ui/toggle_controls'}},
+    }}
+end
 local function publish()
     mp.set_property_native('user-data/player-ui/timeline-style', style)
     mp.set_property_native('user-data/player-ui/timeline-cache', cache)
     mp.set_property_native('user-data/player-ui/icon-style',prefs.icon_style)
     mp.set_property_native('user-data/player-ui/chapter-marks',prefs.chapter_marks)
+    mp.set_property_native('user-data/player-ui/controls-always',prefs.controls_always)
     mp.commandv('script-message-to', 'uosc', 'update-menu', utils.format_json(menu_data()))
     mp.commandv('script-message-to','uosc','update-menu',utils.format_json(icons_menu()))
+    mp.commandv('script-message-to','uosc','update-menu',utils.format_json(controls_menu()))
 end
 local function save_option(key, value)
     local source = '\n' .. read_config()
@@ -99,6 +107,12 @@ mp.add_key_binding(nil, 'timeline_menu', function()
 end)
 mp.add_key_binding(nil,'icons_menu',function()
     mp.commandv('script-message-to','uosc','open-menu',utils.format_json(icons_menu()))
+end)
+mp.add_key_binding(nil,'controls_menu',function()
+    mp.commandv('script-message-to','uosc','open-menu',utils.format_json(controls_menu()))
+end)
+mp.add_key_binding(nil,'toggle_controls',function()
+    prefs.controls_always=not prefs.controls_always;save_prefs();publish()
 end)
 mp.register_script_message('icon-style',function(value)
     if value~='glass' and value~='plain' then return end

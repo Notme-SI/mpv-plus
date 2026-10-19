@@ -3,18 +3,29 @@ local root=mp.command_native({'expand-path','~~/'})
 local ui=dofile(root..'/extensions/ui_locale.lua');ui.install_messages()
 local utils=require 'mp.utils'
 local policy=dofile(root..'/extensions/playback_preferences.lua')
-local ts=dofile(root..'/extensions/torrserver.lua')
+local source=dofile(root..'/extensions/media_source.lua')
+local network=dofile(root..'/extensions/network_state.lua')
 local opts={reconnect=true,buffer='auto'}
 dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua').options(opts,'network_playback')
-local profiles={auto=false,normal={seconds=60,bytes=256*1024*1024,wait=2},large={seconds=180,bytes=512*1024*1024,wait=3}}
+local profiles={auto=true,normal=true,large=true}
 if profiles[opts.buffer]==nil then opts.buffer='auto' end
 local session,pending,restarting,held,timer
 local diagnostics=false
-local server={scheme='http',host='127.0.0.1',port='8090',use_edl=true}
-dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua').options(server,'torrserver-loader')
-local origin=server.scheme..'://'..server.host..':'..server.port
-local matches_server=ts.matcher(origin)
 local stat,request,request_generation={},nil,0
+local cache_profile
+local function apply_buffer()
+    local path=mp.get_property('path','')
+    if not policy.network(path) then cache_profile=nil;return end
+    cache_profile=network.profile(opts.buffer,source.stream(path)~=nil)
+    local profile=cache_profile
+    mp.set_property('file-local-options/cache','yes')
+    mp.set_property('file-local-options/demuxer-seekable-cache','yes')
+    mp.set_property('file-local-options/cache-pause','yes')
+    mp.set_property_number('file-local-options/cache-secs',profile.seconds)
+    mp.set_property_number('file-local-options/demuxer-max-bytes',profile.bytes)
+    mp.set_property_number('file-local-options/demuxer-max-back-bytes',profile.back)
+    mp.set_property_number('file-local-options/cache-pause-wait',profile.wait)
+end
 local function save()
     local f=io.open(dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua').path('script-opts/network_playback.conf'),'wb')
     if not f then mp.osd_message('Не удалось сохранить настройки сети',3);return end
@@ -23,7 +34,7 @@ local function save()
 end
 local function status(state)
     mp.set_property_native('user-data/network-playback',{state=state,attempt=session and session.tries or 0,
-        reconnect=opts.reconnect,buffer=opts.buffer})
+        reconnect=opts.reconnect,buffer=opts.buffer,profile=cache_profile})
 end
 local function release_hook()
     if timer then timer:kill();timer=nil end
@@ -67,15 +78,7 @@ mp.add_hook('on_load',70,function()
         mp.set_property_bool('pause',session.pause==true)
         session.resume=nil
     end
-    if policy.network(mp.get_property('path','')) then
-        local profile=profiles[opts.buffer]
-        if profile then
-            mp.set_property('file-local-options/cache','yes')
-            mp.set_property_number('file-local-options/cache-secs',profile.seconds)
-            mp.set_property_number('file-local-options/demuxer-max-bytes',profile.bytes)
-            mp.set_property_number('file-local-options/cache-pause-wait',profile.wait)
-        end
-    end
+    apply_buffer()
 end)
 mp.register_event('file-loaded',function() if session then session.loaded=true;capture();status('playing') end end)
 mp.add_periodic_timer(1,function()
@@ -127,19 +130,21 @@ local function stop_stat()
     if request then mp.abort_async_command(request);request=nil end
     stat={}
 end
+local function buffering() return session and session.active and policy.network(mp.get_property('path','')) and mp.get_property_bool('paused-for-cache',false) end
+local draw_buffering
 local function poll_stat()
-    if not diagnostics or request then return end
-    local path=mp.get_property('path','')
-    local hash=path:match('[?&]link=(%x+)')
-    if not matches_server(path) or not hash or #hash~=40 then stat={};return end
+    if not (diagnostics or buffering()) or request then return end
+    local stream=source.stream(mp.get_property('path',''))
+    if not stream then stat={};return end
     local gen=request_generation
     request=mp.command_native_async({name='subprocess',capture_stdout=true,capture_stderr=true,args={
         'curl','--silent','--fail','--connect-timeout','2','--max-time','3','--max-filesize','1048576',
-        origin..'/stream?link='..hash..'&stat'}},function(ok,result)
+        '-H','Content-Type: application/json','--data',utils.format_json({action='get',hash=stream.hash}),network.request(stream)}},function(ok,result)
         if gen~=request_generation then return end
         request=nil
         local value=ok and result and result.status==0 and utils.parse_json(result.stdout or '') or nil
-        stat=type(value)=='table' and value or {unavailable=true}
+        stat=network.stats(value)
+        if draw_buffering then draw_buffering() end
     end)
 end
 local function number(value,format)
@@ -158,9 +163,9 @@ local function menu()
     local items={
         {title='Восстановление после обрыва',hint=opts.reconnect and 'ВКЛ' or 'ВЫКЛ',value={'script-binding','network_playback/toggle'}},
         {title='Буфер',items={
-            {title='Авто',hint='Настройки mpv',active=opts.buffer=='auto',value={'script-message-to','network_playback','buffer','auto'}},
-            {title='Стандартный',hint='До 60 с / 256 МБ',active=opts.buffer=='normal',value={'script-message-to','network_playback','buffer','normal'}},
-            {title='Увеличенный',hint='До 180 с / 512 МБ',active=opts.buffer=='large',value={'script-message-to','network_playback','buffer','large'}},
+            {title='Авто',hint='По текущему источнику',active=opts.buffer=='auto',value={'script-message-to','network_playback','buffer','auto'}},
+            {title='Стандартный',hint='60 с · 256 МБ вперёд / 128 МБ назад',active=opts.buffer=='normal',value={'script-message-to','network_playback','buffer','normal'}},
+            {title='Увеличенный',hint='180 с · 512 МБ вперёд / 256 МБ назад',active=opts.buffer=='large',value={'script-message-to','network_playback','buffer','large'}},
         }},
         {title='Состояние',hint=state,selectable=false},
         {title='Запас видео',hint=number(mp.get_property_number('demuxer-cache-duration'),'%.1f')..' '..ui.text('с'),selectable=false},
@@ -169,29 +174,52 @@ local function menu()
         {title='Пропущено кадров',hint=number(mp.get_property_number('frame-drop-count')),selectable=false},
         {title='Разница аудио и видео',hint=number(mp.get_property_number('avsync'),'%.3f')..' '..ui.text('с'),selectable=false},
     }
-    if matches_server(mp.get_property('path','')) then
+    if source.stream(mp.get_property('path','')) then
         items[#items+1]={title='TorrServer',hint=stat.unavailable and 'Нет ответа' or stat.download_speed and 'Подключён' or 'Ожидание данных',selectable=false}
+        items[#items+1]={title='Кеш TorrServer',hint=number(megabytes(stat.filled),'%.1f')..' / '..number(megabytes(stat.capacity),'%.1f')..' '..ui.text('МБ'),selectable=false}
         items[#items+1]={title='Загрузка TorrServer',hint=number(megabytes(stat.download_speed),'%.2f')..' '..ui.text('МБ/с'),selectable=false}
         items[#items+1]={title='Пиры / сиды',hint=number(stat.active_peers)..' / '..number(stat.connected_seeders),selectable=false}
     end
     if pending then items[#items+1]={title='Отменить восстановление',value={'script-binding','network_playback/cancel'}} end
     return {type='network-playback',title='Сеть и буфер',keep_open=true,items=items,
-        footnote='Буфер помогает при кратких просадках сети. Новый размер действует со следующего открытия файла.'}
+        footnote='Изменения действуют сразу. Кеш TorrServer и буфер плеера работают отдельно; перемотка вне сохранённого диапазона требует загрузки.'}
 end
 local function update_menu() if diagnostics then mp.commandv('script-message-to','uosc','update-menu',utils.format_json(menu())) end end
+local panel=dofile(root..'/extensions/buffering_panel.lua').new(ui)
+draw_buffering=function()
+    local data={active=buffering()==true,torrent=source.stream(mp.get_property('path',''))~=nil,stat=stat,
+        seconds=mp.get_property_number('demuxer-cache-duration'),speed=mp.get_property_number('cache-speed')}
+    mp.set_property_native('user-data/network-buffering',data)
+    if not data.active then panel.hide();return end
+    panel.draw(data)
+end
+local telemetry_timer
+local function telemetry()
+    poll_stat();draw_buffering();update_menu()
+end
+local function refresh_telemetry()
+    if diagnostics or buffering() then
+        if not telemetry_timer then telemetry_timer=mp.add_periodic_timer(1,telemetry) end
+        telemetry()
+    else
+        if telemetry_timer then telemetry_timer:kill();telemetry_timer=nil end
+        stop_stat();panel.hide()
+    end
+end
 mp.add_key_binding(nil,'menu',function()
-    diagnostics=true;poll_stat();mp.commandv('script-message-to','uosc','open-menu',utils.format_json(menu()))
+    diagnostics=true;refresh_telemetry();mp.commandv('script-message-to','uosc','open-menu',utils.format_json(menu()))
 end)
 local function settings_changed()
-    save();status(mp.get_property_native('user-data/network-playback',{}).state or 'idle');update_menu()
+    save();if session and session.active then apply_buffer() end;status(mp.get_property_native('user-data/network-playback',{}).state or 'idle');update_menu()
 end
 mp.add_key_binding(nil,'toggle',function() opts.reconnect=not opts.reconnect;if not opts.reconnect then cancel() end;settings_changed() end)
 mp.register_script_message('buffer',function(value) if profiles[value]~=nil then opts.buffer=value;settings_changed() end end)
 mp.observe_property('user-data/uosc/menu/type','string',function(_,kind)
     diagnostics=kind=='network-playback'
-    if not diagnostics then stop_stat() end
+    refresh_telemetry()
 end)
-mp.register_event('start-file',stop_stat)
-mp.register_event('end-file',stop_stat)
-mp.add_periodic_timer(2,function() if diagnostics then poll_stat();update_menu() end end)
+mp.observe_property('paused-for-cache','bool',refresh_telemetry)
+mp.register_event('start-file',function()stop_stat();refresh_telemetry()end)
+mp.register_event('end-file',function()stop_stat();refresh_telemetry()end)
+mp.register_event('shutdown',function()if telemetry_timer then telemetry_timer:kill()end;panel.hide()end)
 status('idle')

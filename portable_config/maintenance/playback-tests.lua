@@ -30,6 +30,7 @@ return function(path)
     local mock={get_property=get,get_property_number=get,get_property_bool=get,get_property_native=get,
         set_property=set,set_property_number=set,set_property_bool=set,set_property_native=set,
         osd_message=noop,remove_key_binding=function(k) bindings[k]=nil end,
+        create_osd_overlay=function()return {remove=noop,update=noop}end,get_osd_size=function()return 1280,720 end,
         add_key_binding=function(_,k,fn) bindings[k]=fn end,add_forced_key_binding=function(_,k,fn) bindings[k]=fn end,
         add_hook=function(k,_,fn) hooks[k]=fn end,
         register_event=function(k,fn) events[k]=events[k] or {};table.insert(events[k],fn) end,
@@ -53,7 +54,7 @@ return function(path)
     end
     local ok,err=xpcall(function()
         mp=mock;package.loaded['mp.options']={read_options=noop}
-        package.loaded['mpv-build/ui_locale']={install_messages=noop,text=function(v) return v end}
+        package.loaded['mpv-build/ui_locale']={install_messages=noop,text=function(v) return v end,language=function()return 'ru'end}
         dofile(path('scripts/network_playback.lua'))
         emit('start-file',{playlist_entry_id=1});hooks.on_load();emit('file-loaded')
         ending('error');assert(props['user-data/network-playback'].attempt==1 and bindings['cancel-reconnect'])

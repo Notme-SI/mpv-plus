@@ -1,4 +1,4 @@
--- Rendering adapters for upstream uosc. Original input and playback logic stays intact.
+-- Local rendering and navigation adapters for upstream uosc.
 return function(script_directory)
     local ui=dofile(mp.command_native({'expand-path','~~/extensions/ui_locale.lua'}))
     package.preload['lib/intl']=function()
@@ -82,8 +82,21 @@ return function(script_directory)
         local update=Menu.update
         function Menu:update(data) return update(self,ui.menu(data)) end
     end)
+    local controls_always=false
+    mp.observe_property('user-data/player-ui/controls-always','bool',function(_,value)
+        controls_always=value==true;if request_render then request_render() end
+    end)
+    extend('Element',function(Element)
+        local persistent=Element.is_persistent
+        local controls={controls=true,timeline=true,top_bar=true,volume=true,speed=true}
+        function Element:is_persistent()
+            if controls_always and not state.is_idle and controls[self.id] then return true end
+            return persistent(self)
+        end
+    end)
     local theme=dofile(mp.command_native({'expand-path','~~/extensions/uosc_theme.lua'}))(extend)
     extend('Timeline', function(Timeline)
+        dofile(mp.command_native({'expand-path','~~/extensions/network_seek.lua'}))(Timeline)
         function Timeline:rail()
             local s = state.scale
             local opts = {size = self.font_size}

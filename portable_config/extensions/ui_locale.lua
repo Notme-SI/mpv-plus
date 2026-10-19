@@ -79,7 +79,7 @@ function M.chapter_text(value,language)
 end
 local interface_menus={menu=true,keybinds=true,['player-timeline-style']=true,['player-icons']=true,
     ['interface-language']=true,['picture-controls']=true,['language-defaults']=true,['audio-memory']=true,
-    autocrop=true,['autocrop-settings']=true,theintrodb=true,['subtitle-memory']=true,['network-playback']=true}
+    autocrop=true,['autocrop-settings']=true,theintrodb=true,['subtitle-memory']=true,['network-playback']=true,['player-controls']=true}
 function M.menu(data)
     local kind=data.type
     local function walk(node,is_menu)
@@ -127,6 +127,12 @@ function M.menu(data)
         end
         if not has(result,'network_playback/menu') then
             table.insert(result.items,math.max(1,#result.items),{title=M.text('Сеть и буфер'),value={'script-binding','network_playback/menu'}})
+        end
+        if not has(result,'player_ui/controls_menu') then
+            local target
+            for _,item in ipairs(result.items)do if item.items and item.title==M.text('Интерфейс')then target=item;break end end
+            if not target then target={title=M.text('Интерфейс'),items={}};result.items[#result.items+1]=target end
+            target.items[#target.items+1]={title=M.text('Управление'),value={'script-binding','player_ui/controls_menu'}}
         end
         if not has(result,'player_maintenance/menu') then
             table.insert(result.items,math.max(1,#result.items),{title=M.language()=='en' and 'Maintenance' or 'Обслуживание',value={'script-binding','player_maintenance/menu'}})
