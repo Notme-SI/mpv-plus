@@ -90,7 +90,7 @@ return function(script_directory)
     end)
     extend('Element',function(Element)
         local persistent=Element.is_persistent
-        local controls={controls=true,timeline=true,top_bar=true,volume=true,speed=true}
+        local controls={controls=true,timeline=true,speed=true}
         function Element:is_persistent()
             if controls_always and (controls[self.id] or self.anchor_id=='controls') then return true end
             return persistent(self)
@@ -293,13 +293,6 @@ return function(script_directory)
     end)
 
     extend('Volume', function(Volume)
-        local visibility=Volume.get_visibility
-        function Volume:get_visibility()
-            if controls_always and (state.is_idle or state.has_audio) then
-                return require('elements/Element').get_visibility(self)
-            end
-            return visibility(self)
-        end
         local init=Volume.init
         function Volume:init(...)
             init(self,...)
@@ -332,6 +325,9 @@ return function(script_directory)
             if not original or not theme.glass() then return original end
             local ass=assdraw.ass_new()
             theme.panel(ass,{ax=self.ax,ay=self.mute_ay,bx=self.bx,by=self.by},self:get_visibility(),self.size/2)
+            -- A separate ASS stream starts with its own first event. Without a
+            -- separator, the panel's (0,0) position also moves the speaker icon.
+            ass:new_event()
             ass.text=ass.text..original.text
             return ass
         end

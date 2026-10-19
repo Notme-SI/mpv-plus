@@ -102,7 +102,7 @@ return function(extend)
             end
             local row_x=x
             local function title(text,size,height,toggle)
-                if not text or limit-x<size*3 then return end
+                if state.is_idle or not text or text=='' or limit-x<size*3 then return end
                 local width=math.min(text_width(text,{size=size})+padding*2,limit-x)
                 local box={ax=x,ay=y,bx=x+width,by=y+height}
                 T.header(ass,box,visibility)
