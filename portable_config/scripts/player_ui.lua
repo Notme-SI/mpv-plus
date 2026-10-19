@@ -4,14 +4,14 @@ ui.install_messages()
 local utils = require 'mp.utils'
 local config_path = dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua').path('script-opts/uosc.conf')
 local style, cache = 'bar', true
-local prefs={icon_style='glass',chapter_marks=true,controls_always=false}
+local prefs={icon_style='glass',chapter_marks=true,controls_always=false,buffer_visible=true,statistics_visible=true}
 dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua').options(prefs,'player_ui')
 if prefs.icon_style~='plain' then prefs.icon_style='glass' end
 local prefs_path=dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua').path('script-opts/player_ui.conf')
 local function save_prefs()
     local f=io.open(prefs_path,'wb')
     if not f then mp.osd_message('Не удалось сохранить оформление',3);return end
-    local ok=f:write('icon_style='..prefs.icon_style..'\nchapter_marks='..(prefs.chapter_marks and 'yes' or 'no')..'\ncontrols_always='..(prefs.controls_always and 'yes' or 'no')..'\n')
+    local ok=f:write('icon_style='..prefs.icon_style..'\nchapter_marks='..(prefs.chapter_marks and 'yes' or 'no')..'\ncontrols_always='..(prefs.controls_always and 'yes' or 'no')..'\nbuffer_visible='..(prefs.buffer_visible and 'yes' or 'no')..'\nstatistics_visible='..(prefs.statistics_visible and 'yes' or 'no')..'\n')
     if not f:close() or not ok then mp.osd_message('Не удалось сохранить оформление',3) end
 end
 local function icons_menu()
@@ -60,6 +60,10 @@ local function controls_menu()
     return {type='player-controls',title='Панель плеера',keep_open=true,items={
         {title='Не скрывать нижнюю панель',hint=prefs.controls_always and 'ВКЛ' or 'ВЫКЛ',
          icon=prefs.controls_always and 'toggle_on' or 'toggle_off',value={'script-binding','player_ui/toggle_controls'}},
+        {title='Показывать строку буфера',hint=prefs.buffer_visible and 'ВКЛ' or 'ВЫКЛ',
+         icon=prefs.buffer_visible and 'toggle_on' or 'toggle_off',value={'script-binding','player_ui/toggle_buffer'}},
+        {title='Показывать статистику',hint=prefs.statistics_visible and 'ВКЛ' or 'ВЫКЛ',
+         icon=prefs.statistics_visible and 'toggle_on' or 'toggle_off',value={'script-binding','player_ui/toggle_statistics'}},
     }}
 end
 local function publish()
@@ -68,6 +72,8 @@ local function publish()
     mp.set_property_native('user-data/player-ui/icon-style',prefs.icon_style)
     mp.set_property_native('user-data/player-ui/chapter-marks',prefs.chapter_marks)
     mp.set_property_native('user-data/player-ui/controls-always',prefs.controls_always)
+    mp.set_property_native('user-data/player-ui/buffer-visible',prefs.buffer_visible)
+    mp.set_property_native('user-data/player-ui/statistics-visible',prefs.statistics_visible)
     mp.commandv('script-message-to', 'uosc', 'update-menu', utils.format_json(menu_data()))
     mp.commandv('script-message-to','uosc','update-menu',utils.format_json(icons_menu()))
     mp.commandv('script-message-to','uosc','update-menu',utils.format_json(controls_menu()))
@@ -114,6 +120,12 @@ end)
 mp.add_key_binding(nil,'toggle_controls',function()
     prefs.controls_always=not prefs.controls_always;save_prefs();publish()
 end)
+for _,item in ipairs({{'buffer','buffer_visible'},{'statistics','statistics_visible'}}) do
+    local key=item[2]
+    mp.add_key_binding(nil,'toggle_'..item[1],function()
+        prefs[key]=not prefs[key];save_prefs();publish()
+    end)
+end
 mp.register_script_message('icon-style',function(value)
     if value~='glass' and value~='plain' then return end
     prefs.icon_style=value;save_prefs();publish()

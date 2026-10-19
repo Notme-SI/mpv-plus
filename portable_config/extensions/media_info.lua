@@ -11,8 +11,11 @@ function M.codec(value)
     if type(value)~='string' or value=='' then return nil end
     return codecs[value:lower()] or (value:match('^pcm_') and 'PCM') or value:upper()
 end
+function M.language(value)
+    return ({rus='Русский',ru='Русский',eng='English',en='English',jpn='日本語',ja='日本語'})[value] or value
+end
 function M.describe(video,audio,params,container_fps)
-    local out={badges={}}
+    local out={badges={},summary={}}
     local function add(kind,text)
         if text then out.badges[#out.badges+1]={kind=kind,text=text} end
     end
@@ -27,12 +30,35 @@ function M.describe(video,audio,params,container_fps)
                 or (edge>=1280 or short>=720) and '720p' or tostring(short)..'p'
             add('quality',quality)
         end
-        add('video',M.codec(video.codec))
+        out.video={width=w,height=h,codec=M.codec(video.codec),profile=video['codec-profile'],decoder=video.decoder}
+        add('video',out.video.codec)
         if params.gamma=='pq' or params.gamma=='hlg' then add('hdr','HDR') end
         local fps=M.number(video['demux-fps']) or M.number(container_fps)
+        out.video.fps=fps
         if fps then out.fps=string.format('%.3f',fps):gsub('0+$',''):gsub('%.$',''):gsub('%.',',')..' FPS' end
     end
-    if type(audio)=='table' then add('audio',M.codec(audio.codec)) end
+    if type(audio)=='table' then
+        out.audio={codec=M.codec(audio.codec),channels=audio['demux-channels'],
+            channel_count=M.number(audio['demux-channel-count']),samplerate=M.number(audio['demux-samplerate']),
+            bitrate=M.number(audio['demux-bitrate']),language=audio.lang,decoder=audio.decoder}
+        add('audio',out.audio.codec)
+    end
+    local video_parts,audio_parts={},{}
+    for _,badge in ipairs(out.badges) do
+        if badge.kind~='audio' then video_parts[#video_parts+1]=badge.text end
+    end
+    if out.fps then video_parts[#video_parts+1]=out.fps end
+    if #video_parts>0 then out.summary[#out.summary+1]={kind='video',text=table.concat(video_parts,' · ')} end
+    if out.audio then
+        local a=out.audio
+        if a.language and a.language~='' then audio_parts[#audio_parts+1]=M.language(a.language) end
+        if a.codec then audio_parts[#audio_parts+1]=a.codec end
+        local layout=({stereo='2.0',mono='1.0'})[a.channels] or a.channels
+        if layout and layout~='' then audio_parts[#audio_parts+1]=layout
+        elseif a.channel_count then audio_parts[#audio_parts+1]=tostring(a.channel_count)..' ch' end
+        if a.bitrate then audio_parts[#audio_parts+1]=string.format('%.0f kbps',a.bitrate/1000) end
+        if #audio_parts>0 then out.summary[#out.summary+1]={kind='audio',text=table.concat(audio_parts,' · ')} end
+    end
     add('fps',out.fps)
     return out
 end

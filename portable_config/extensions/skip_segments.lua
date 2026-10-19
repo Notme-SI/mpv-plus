@@ -21,6 +21,7 @@ function M.validate(kind,segment,duration)
     local length=finish-start
     if length<=0 or length>(kind=='credits' and 900 or 300) then return end
     if kind=='credits' and length<10 then return end
+    if kind=='credits' and segment.source~='chapters' and duration>0 and start<duration/2 then return end
     return {kind=kind,start=start,['end']=finish,source=segment.source or 'online'}
 end
 function M.flatten(data,duration)
@@ -37,6 +38,14 @@ function M.flatten(data,duration)
     local out={}
     for _,segment in ipairs(result) do
         local duplicate=false
+        for _,other in ipairs(result) do
+            if other~=segment and other.kind~=segment.kind
+                and math.min(segment['end'],other['end'])-math.max(segment.start,other.start)>1 then
+                -- A chapter wins over online data. Equally authoritative,
+                -- contradictory labels are unsafe: discard both, never guess.
+                if segment.source~='chapters' or other.source=='chapters' then duplicate=true;break end
+            end
+        end
         for _,prior in ipairs(out) do
             if segment.kind==prior.kind and math.abs(segment.start-prior.start)<1
                 and math.abs(segment['end']-prior['end'])<1 then duplicate=true;break end
@@ -99,7 +108,7 @@ function M.from_chapters(chapters,duration,normalize)
         -- this generic name are ambiguous; explicit OP/Opening labels remain valid.
         local generic=normalize(chapter.title or '')=='intro'
         local ambiguous=kind=='intro' and generic and start and finish and finish-start<30
-        if kind and not ambiguous and start and finish and M.validate(kind,{start_ms=start*1000,end_ms=finish*1000},duration) then
+        if kind and not ambiguous and start and finish and M.validate(kind,{start_ms=start*1000,end_ms=finish*1000,source='chapters'},duration) then
             out[kind]=out[kind] or {}
             out[kind][#out[kind]+1]={start_ms=start*1000,end_ms=finish*1000,source='chapters'}
         end

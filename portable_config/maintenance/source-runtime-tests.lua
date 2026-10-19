@@ -55,6 +55,10 @@ return function(path)
         package.loaded['mpv-build/ui_locale']={install_messages=noop,text=function(t)return t end,language=function()return 'ru'end}
         local source=dofile(path('extensions/media_source.lua'))
         local stream=assert(source.stream(media))
+        local named=assert(source.stream(media:gsub('/stream%?', '/stream/Episode%%20Three.mkv?',1)))
+        assert(named.url==stream.url and named.key==stream.key and named.index==12,
+            'Official named M3U streams use the canonical metadata endpoint')
+        assert(not source.stream(media:gsub('/stream%?', '/stream/nested/file?',1)), 'Do not accept arbitrary nested routes')
         assert(stream.origin=='https://remote.example/torrserver' and stream.index==12)
         assert(stream.url=='https://remote.example/torrserver/stream?link='..hash..'&token=fixture&stat')
         local encoded=source.stream('edl://!new_stream;%200%'..media..';!new_stream;https://audio.example/track;')

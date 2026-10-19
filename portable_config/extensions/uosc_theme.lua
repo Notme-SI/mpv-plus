@@ -122,7 +122,7 @@ return function(extend)
             if self.current_chapter then
                 badges[#badges+1]={kind='chapter',text=ui.chapter_text(self.current_chapter.title)}
             end
-            for _,badge in ipairs(T.metadata.badges or {}) do badges[#badges+1]=badge end
+            for _,badge in ipairs(T.metadata.summary or T.metadata.badges or {}) do badges[#badges+1]=badge end
             if #badges>0 and state.duration and state.time then
                 local next_chapter=self.current_chapter and state.chapters[self.current_chapter.index+1]
                 local ending=next_chapter and next_chapter.time or state.duration

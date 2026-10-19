@@ -5,7 +5,10 @@ function M.stream(path)
     local url=(path or ''):match('(https?://[^%s;]+)')
     if not url then return end
     local authority,route,query=url:match('^(https?://[^/?#]+)(/[^?#]*)%?([^#]*)')
-    if not authority or not route:match('/stream$') then return end
+    if not authority then return end
+    -- Official M3U links append an escaped filename after /stream/.
+    local prefix=route:match('^(.-)/stream$') or route:match('^(.-)/stream/[^/]+$')
+    if not prefix then return end
     local params={}
     for pair in query:gmatch('[^&]+') do
         local key,value=pair:match('^([^=]+)=(.*)$')
@@ -20,7 +23,6 @@ function M.stream(path)
     name=name or host
     if name=='127.0.0.1' or name=='[::1]' then name='localhost' end
     host=name..(port or '')
-    local prefix=route:sub(1,-8)
     local origin=scheme..'://'..host..prefix
     local stat={}
     for pair in query:gmatch('[^&]+') do
@@ -29,7 +31,7 @@ function M.stream(path)
     end
     stat[#stat+1]='stat'
     return {hash=hash:lower(),index=tonumber(params.index),origin=origin,key=origin..'|'..hash:lower(),
-        url=authority..route..'?'..table.concat(stat,'&')}
+        url=authority..prefix..'/stream?'..table.concat(stat,'&')}
 end
 function M.current()
     local path=mp.get_property('path','')

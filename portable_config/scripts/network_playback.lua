@@ -148,7 +148,7 @@ end
 local function buffering() return loading_reason()~=nil end
 local draw_buffering
 local function poll_stat()
-    if not (diagnostics or buffering()) or request then return end
+    if not (diagnostics or buffering() and mp.get_property_native('user-data/player-ui/statistics-visible',true)) or request then return end
     local stream=source.stream(mp.get_property('path',''))
     if not stream then stat={};return end
     local gen=request_generation
@@ -182,9 +182,12 @@ local function menu()
             {title='Стандартный',hint='60 с · 256 МБ вперёд / 128 МБ назад',active=opts.buffer=='normal',value={'script-message-to','network_playback','buffer','normal'}},
             {title='Увеличенный',hint='180 с · 512 МБ вперёд / 256 МБ назад',active=opts.buffer=='large',value={'script-message-to','network_playback','buffer','large'}},
         }},
+        {title='Источник',hint=source.stream(mp.get_property('path','')) and 'TorrServer' or policy.network(mp.get_property('path','')) and 'HTTP' or 'Файл',selectable=false},
         {title='Состояние',hint=state,selectable=false},
         {title='Запас видео',hint=number(mp.get_property_number('demuxer-cache-duration'),'%.1f')..' '..ui.text('с'),selectable=false},
         {title='Буфер плеера',hint=number(cache['fw-bytes'] and cache['fw-bytes']/1048576,'%.1f')..' '..ui.text('МБ'),selectable=false},
+        {title='Буфер плеера назад',hint=number(cache['total-bytes'] and cache['fw-bytes'] and math.max(0,cache['total-bytes']-cache['fw-bytes'])/1048576,'%.1f')..' '..ui.text('МБ'),selectable=false},
+        {title='Заполнение буфера',hint=number(mp.get_property_number('cache-buffering-state'))..' %',selectable=false},
         {title='Скорость чтения',hint=number(mp.get_property_number('cache-speed') and mp.get_property_number('cache-speed')/1048576,'%.2f')..' '..ui.text('МБ/с'),selectable=false},
         {title='Пропущено кадров',hint=number(mp.get_property_number('frame-drop-count')),selectable=false},
         {title='Разница аудио и видео',hint=number(mp.get_property_number('avsync'),'%.3f')..' '..ui.text('с'),selectable=false},
@@ -194,6 +197,12 @@ local function menu()
         items[#items+1]={title='Кеш TorrServer',hint=number(megabytes(stat.filled),'%.1f')..' / '..number(megabytes(stat.capacity),'%.1f')..' '..ui.text('МБ'),selectable=false}
         items[#items+1]={title='Загрузка TorrServer',hint=number(megabytes(stat.download_speed),'%.2f')..' '..ui.text('МБ/с'),selectable=false}
         items[#items+1]={title='Пиры / сиды',hint=number(stat.active_peers)..' / '..number(stat.connected_seeders),selectable=false}
+    end
+    local loader=mp.get_property_native('user-data/torrserver-loading',{})
+    if loader.media==mp.get_property('path','') and type(loader.time)=='number' and mp.get_time()-loader.time<1.3 then
+        for _,pair in ipairs({{'Файл',loader.file},{'Внешние дорожки',loader.extra}}) do
+            if pair[2] and pair[2]~='' then items[#items+1]={title=pair[1],hint=pair[2],selectable=false} end
+        end
     end
     if pending then items[#items+1]={title='Отменить восстановление',value={'script-binding','network_playback/cancel'}} end
     return {type='network-playback',title='Сеть и буфер',keep_open=true,items=items,
@@ -212,7 +221,11 @@ draw_buffering=function()
         seconds=mp.get_property_number('demuxer-cache-duration'),speed=mp.get_property_number('cache-speed'),
         forward_bytes=cache['fw-bytes'],back_bytes=cache['total-bytes'] and cache['fw-bytes'] and math.max(0,cache['total-bytes']-cache['fw-bytes']),
         progress=mp.get_property_number('cache-buffering-state'),dropped=mp.get_property_number('frame-drop-count'),
-        avsync=mp.get_property_number('avsync'),profile=cache_profile}
+        avsync=mp.get_property_number('avsync'),profile=cache_profile,
+        media=mp.get_property_native('user-data/media-info',{}),hwdec=mp.get_property('hwdec-current'),
+        display_fps=mp.get_property_number('display-fps'),
+        show_buffer=mp.get_property_native('user-data/player-ui/buffer-visible',true),
+        show_statistics=mp.get_property_native('user-data/player-ui/statistics-visible',true)}
     mp.set_property_native('user-data/network-buffering',data)
     if not data.active then panel.hide();return end
     panel.draw(data)
@@ -245,7 +258,10 @@ end)
 for _,property in ipairs({'paused-for-cache','seeking','core-idle','cache-buffering-state','pause','eof-reached'})do
     mp.observe_property(property,'native',refresh_telemetry)
 end
-mp.observe_property('osd-dimensions','native',function()draw_buffering()end)
+for _,property in ipairs({'osd-dimensions','user-data/player-ui/buffer-visible','user-data/player-ui/statistics-visible',
+    'user-data/interface-language','user-data/media-info','hwdec-current','display-fps'}) do
+    mp.observe_property(property,'native',function()draw_buffering()end)
+end
 mp.observe_property('user-data/torrserver-loading','native',refresh_telemetry)
 mp.register_event('file-loaded',refresh_telemetry)
 mp.register_event('playback-restart',refresh_telemetry)

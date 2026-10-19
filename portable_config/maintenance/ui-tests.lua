@@ -14,6 +14,36 @@ return function(path)
     assert(#info.describe(nil,nil,{},0).badges==0,'New file clears old metadata')
     assert(info.describe({image=true,['demux-fps']=30},nil,{},60).fps==nil,'No FPS for cover images')
 
+    local rich=info.describe(video(1920,1080,24000/1001,'h264'),{codec='aac',lang='rus',
+        ['demux-channels']='stereo',['demux-channel-count']=2,['demux-samplerate']=48000,['demux-bitrate']=127000,decoder='aac'},{},nil)
+    assert(rich.video.width==1920 and rich.video.fps==24000/1001 and rich.audio.samplerate==48000)
+    assert(rich.summary[2].text=='Русский · AAC · 2.0 · 127 kbps','Audio summary uses real source values')
+    assert(not rich.summary[1].text:find('60',1,true),'Display refresh must not replace source FPS')
+    -- Real renderer: cache percentage must describe time coverage, not the
+    -- unrelated loading-progress property; unknown values must not become zero.
+    local native_mp=mp
+    local overlay={update=function()end,remove=function(self)self.data=''end}
+    local w,h=1280,720
+    local ok_render,render_error=xpcall(function()
+        mp={command_native=function()return path('')end,create_osd_overlay=function()return overlay end,
+            get_osd_size=function()return w,h end}
+        local panel=dofile(path('extensions/buffering_panel.lua')).new({language=function()return 'ru'end})
+        local sample={seconds=23,profile={seconds=50},progress=100,speed=2*1048576,
+            forward_bytes=8*1048576,back_bytes=12*1048576,media=rich,hwdec='no',dropped=0,avsync=-.015}
+        panel.draw(sample)
+        assert(overlay.data:find('46 %',1,true) and not overlay.data:find('100 %',1,true),'Time coverage and loading progress are separate')
+        assert(overlay.data:find('Программное декодирование',1,true) and overlay.data:find('AAC',1,true),'Describe actual codecs and active decoding')
+        assert(overlay.data:find('-0.015',1,true),'Signed audio/video sync is retained')
+        for _,size in ipairs({{640,360},{1920,1080},{3840,2160}})do
+            w,h=size[1],size[2];panel.draw(sample)
+            assert(overlay.res_x==w and overlay.res_y==h and not overlay.data:find('nan',1,true),'Scale to the actual OSD')
+        end
+        sample.seconds=nil;sample.speed=nil;sample.show_statistics=false;panel.draw(sample)
+        assert(overlay.data:find('Буфер —',1,true) and not overlay.data:find('0 %',1,true),'Missing telemetry is not a fake zero')
+        sample.show_buffer=false;panel.draw(sample);assert(overlay.data=='','Disabled overlays leave no stale ASS')
+    end,debug.traceback)
+    mp=native_mp;assert(ok_render,render_error)
+
     -- Check the real numeric-input callback without creating settings or opening a window.
     local real=mp
     local saved_input,saved_options=package.loaded['mp.input'],package.loaded['mp.options']
