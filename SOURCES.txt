@@ -11,7 +11,7 @@ portable_config/vendor и portable_config/extensions.
 Расширения сборки: portable_config/extensions и отдельные scripts.
 Локальные модули network_state, buffering_panel и network_seek: профили буфера,
 асинхронная статистика текущего потока и объединение сетевых перемоток (MIT).
-Модуль anime_online: резервный поиск MAL через публичный Jikan API (MIT).
+Модуль anime_online: автоматический поиск через официальный MAL API и резервный Jikan API (MIT).
 Jikan — неофициальный сервис чтения каталога MyAnimeList; его код не включён в сборку.
 Документация сервиса: https://docs.api.jikan.moe/
 Адаптеры и оставшиеся патчи: portable_config/maintenance/patches.

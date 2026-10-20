@@ -29,6 +29,11 @@ function M.path(name)
     end
     return target
 end
+-- Account identifiers stay in the Windows profile, outside distributed packages.
+function M.account_path(name)
+    local profile=os.getenv('APPDATA')
+    return profile and profile..'/mpv-plus/'..name or M.path(name)
+end
 function M.options(values,name)
     require('mp.options').read_options(values,name)
     local file=io.open(M.path('script-opts/'..name..'.conf'),'rb')

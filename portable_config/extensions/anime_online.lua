@@ -110,6 +110,18 @@ function M.choose(candidates,query)
     return selected and M.identity(selected,query)
 end
 function M.new(call,settings,utils,clock,options)
+    options=options or {}
+    if (options.mal_client_id or '')=='' then
+        local paths={settings.path('mal-client-id.txt')}
+        if settings.account_path then table.insert(paths,1,settings.account_path('mal-client-id.txt')) end
+        for _,name in ipairs(paths)do
+            local file=io.open(name,'rb')
+            if file then
+                local value=(file:read(256) or ''):gsub('%s','');file:close()
+                if #value>0 and #value<=200 and not value:find('[^%w_%-]') then options.mal_client_id=value;break end
+            end
+        end
+    end
     local cache,last_request,cooldown={},-math.huge,0
     local function load()
         local file=io.open(settings.path('anime-search-cache.json'),'rb')

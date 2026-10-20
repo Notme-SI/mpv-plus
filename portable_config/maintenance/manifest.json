@@ -183,7 +183,7 @@
     "extensions/autocrop.lua": "b08b8002bc17621226c626de830a64ec07e606841443c50260f4334f4a94ec76",
     "extensions/playback_preferences.lua": "91eba26eb6270d2ca20b535936cc9c106e84d762c8c52d4578f3a6232b1b2abb",
     "extensions/async_requests.lua": "950eeaac3dd51db7ed6719fb9b8a84deb4b091e00a7e64ae5483c3630edce757",
-    "extensions/anime_online.lua": "13bb8078259e94ac2a097f867a06194916c29c25ed89557a0e3570f9252d229b",
+    "extensions/anime_online.lua": "7fdd7363299861e26e84e7a16071c6f214a2eb68935233f60e46f48acf8386aa",
     "maintenance/anime-online-tests.lua": "968336fe7a0729fa7b955595cd6569cc9b94e694c11670a15478d2aac592e7b9",
     "maintenance/anime-online-runtime-tests.lua": "ead1af5c1604bff41b239a761953e0b49f0f07e523bdab5cbc071deb932790fd"
   }

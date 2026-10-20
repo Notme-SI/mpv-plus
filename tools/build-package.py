@@ -92,6 +92,14 @@ for line in anime_options.splitlines():
         raise SystemExit('Keep the public MAL application configuration empty')
 
 out.parent.mkdir(exist_ok=True)
+# Public native-application identifier supplied by the release builder, never an
+# account password or Client Secret. The owner authorized its distribution.
+mal_client = os.environ.get('MPV_PLUS_MAL_CLIENT_ID', '').strip()
+if mal_client:
+    import re
+    if not re.fullmatch(r'[A-Za-z0-9_-]{1,200}', mal_client):
+        raise SystemExit('Invalid MAL application Client ID')
+    files['portable_config/mal-client-id.txt'] = (mal_client + '\n').encode('ascii')
 with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
     for name, content in sorted(files.items()):
         archive.writestr(f'mpv+-{version}/{name}', content)
