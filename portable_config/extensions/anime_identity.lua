@@ -48,10 +48,31 @@ local function season_id(title,season,index)
     for key in pairs(hits) do id=key;count=count+1 end
     return count==1 and id or nil
 end
+local function release_arc(title,number,index)
+    local id=index[fmt.normalize(title)]
+    local base=id and M.catalog()[tostring(id)]
+    if not base or not base.tmdb_id then return end
+    local match
+    -- Keep verified release ordinals available with the clean bundled catalog,
+    -- which predates the optional tv_number annotations in rebuilt snapshots.
+    local release_numbers={['55701']=4}
+    for id,entry in pairs(M.catalog())do
+        if entry.tmdb_id==base.tmdb_id and entry.kind=='tv' and (entry.tv_number or release_numbers[tostring(id)])==number then
+            if match then return end
+            match=id
+        end
+    end
+    return match
+end
 local function identify(data,index)
     data=copy(data)
     if fmt.normalize(data.title)=='' then data.anime=false;return data end
     local direct=index[fmt.normalize(data.title)]
+    local release_base,release_number=data.title:match('^(.-)%s+[Tt][Vv]%s*%-%s*(%d+)%s*$')
+    local arc=release_base and release_arc(release_base,tonumber(release_number),index)
+    if arc then
+        data.title=release_base;data.season=M.catalog()[arc].season;data.season_inferred=nil;direct=arc
+    end
     local base,n=data.title:match('^(.-)%s+(%d+)[snrt][tdh]%s+[Ss]eason$')
     if not base then base,n=data.title:match('^(.-)%s+[Ss]eason%s+(%d+)$') end
     if not base then base,n=data.title:match('^(.-)%s+(%d+)$') end
@@ -90,6 +111,18 @@ end
 function M.enrich(raw,data,index)
     index=index or M.database()
     local result=identify(data,index)
+    -- Release TV-4 is not necessarily TMDB season 4. Use only an explicit,
+    -- curated arc mapping; for this series TMDB includes the separate train arc.
+    local tv=fmt.decode(raw or ''):match('[Tt][Vv]%s*%-%s*(%d+)')
+    if tv then
+        local arc=release_arc(data.title,tonumber(tv),index)
+        if arc then
+            result=copy(data);result.title=data.title;result.mal_id=arc;result.anime=true
+            local entry=M.catalog()[arc]
+            result.kind='tv';result.season=entry.season;result.season_inferred=nil
+            result.tmdb_id=entry.tmdb_id;result.tmdb_season=entry.season;result.tmdb_offset=entry.offset or 0
+        end
+    end
     -- Leading episode numbers are stripped only after a database-confirmed anime match.
     local name=fmt.decode(raw or ''):gsub('^.*[/\\]','')
     local episode,rest=name:match('^(%d%d?%d?%d?)%.%s+(.+)$')

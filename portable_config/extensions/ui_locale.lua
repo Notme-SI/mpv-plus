@@ -110,7 +110,14 @@ function M.menu(data)
         end
         if node.items then
             copy.items={}
-            for i,item in ipairs(node.items) do copy.items[i]=walk(item,false) end
+            local removed={['theintrodb/theintrodb-skip-intro']=true,
+                ['theintrodb/theintrodb-skip-recap']=true,['theintrodb/theintrodb-skip-credits']=true,
+                ['theintrodb/theintrodb-skip-preview']=true}
+            for _,item in ipairs(node.items) do
+                local binding=(type(item.value)=='table' and item.value[1]=='script-binding' and item.value[2])
+                    or (type(item.value)=='string' and item.value:match('^script%-binding%s+(.+)$'))
+                if kind~='menu' or not removed[binding] then copy.items[#copy.items+1]=walk(item,false) end
+            end
         end
         return copy
     end
@@ -147,7 +154,7 @@ function M.menu(data)
             table.insert(result.items,math.max(1,#result.items),{title=M.text('Обновления компонентов'),value={'script-binding','component_updates/menu'}})
         end
         -- Keep the menu name aligned with the actual feature: it now covers
-        -- intro, recap, credits, preview and automatic-skip preferences.
+        -- intro, recap, credits and automatic-skip preferences.
         local function rename_skip(node)
             if type(node)~='table' then return end
             local binding=(type(node.value)=='table' and node.value[1]=='script-binding' and node.value[2])

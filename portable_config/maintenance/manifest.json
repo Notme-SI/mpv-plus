@@ -21,7 +21,7 @@
       "remotePath": "autochapters/main.lua",
       "path": "scripts/autochapters/main.lua",
       "version": "3fafabb55cb0168f711acfd6aa5da42fc6e34d8a",
-      "installedHash": "b53500c494db3125c05cb56c47ef4dafd80cb53977de209de3e0ed25d36dd0cb",
+      "installedHash": "682734b9f9d05b40b22b1dd59072eadd9acef837325311b84940d295b81d0d7c",
       "patchFile": "patches/autochapters.json"
     },
     {
@@ -52,7 +52,7 @@
       "remotePath": "scripts/theintrodb.lua",
       "path": "scripts/theintrodb.lua",
       "version": "d88e3dd899e75fc00df31ce9e7072b6891e05135",
-      "installedHash": "470a7f425c3a0ac00503a44e618c89ace1eaebfb3945e52f992321ff44f5488b",
+      "installedHash": "06e2344a656daac860f50652e2d27538576c2150ba7d760680379db4c6362cac",
       "patchFile": "patches/TheIntroDB.json"
     },
     {
@@ -155,28 +155,33 @@
       "installedHash": "26eeeff0d4ef9b0e0bb0477410c37c73b0132bd42af31aabe6c0f2086b510cb5"
     }
   ],
-  "buildVersion": "1.1.0",
+  "buildVersion": "1.1.1",
   "extensionLayout": 2,
   "localFiles": {
-    "extensions/lampa_context.lua": "241ad00e53edeac7ae88a40f87ece64ae35a9937dfb64ce603ccad36ee4cf8fc",
-    "extensions/uosc_theme.lua": "da3af9ec2f915448d60e0d39672b9ffd2b2bbdd12f59582803ac998214c39609",
-    "extensions/glass_surface.lua": "2e5e076014ea89bf5726c2b0708cc514c95f1ec1c0a9e002029ca9e69b5a42e5",
-    "extensions/uosc_skin.lua": "baa42b95f32ab151bbfd4985d286cfe3e81978625bbded385a2072ba356a493c",
-    "extensions/overlay_style.lua": "184c2371d6630874a724169de6f18b0beb30fbb3f7320aabef8ba76977097492",
-    "extensions/title_format.lua": "bc4d1108c577d2cdeec21a67b433bff37be48dcab84ef0e6ba109d5d1e980f3e",
-    "extensions/anime_identity.lua": "9d14aed64863f2d5bc0284bfc00f85d8a0c188fc88328bc11e877677247afaf7",
-    "extensions/media_source.lua": "b70c39cf03202015b0732777de64cf883a55f7b552deef4228c0c34c04abe53d",
+    "extensions/lampa_context.lua": "4d61fa67cea50e12878474e2989f34a0cbf05d216ee39d7adf8352a2d8648e44",
+    "extensions/uosc_theme.lua": "be6ff4e7d6aea308f6a06cdd926286156a28b146f7c2edea021847bee5b65650",
+    "extensions/glass_surface.lua": "ea698e802fedde586be804d683c2d31610c1ff67e4c69471ca46316657559e68",
+    "extensions/uosc_skin.lua": "2a55b8bc423c573495fec680bfc9b29d9b80408f13becc0cff5403107e300a2a",
+    "extensions/overlay_style.lua": "aaab31507163a448be230c5f6e37d38cccd0570fc0ebd9abc8e8b9f771121fdf",
+    "extensions/title_format.lua": "75f08edf6a41aa0b9d6b1f0b6d7ee0fdd3b52841034db6d001f0493d9d1a728d",
+    "extensions/anime_identity.lua": "4df2cd1dd5b2599fca50690f34896b8eddb7901fdb810d6077200ec558735de0",
+    "extensions/media_source.lua": "ac0b2dbaaead8d8351359892f57886e65bb8a7e7cfbea3012808c33005307c67",
     "scripts/window-state.lua": "88ee076056f523cbfe3f5718415ba159b00e4453e0ad70fb2ca4ef9a596f930a",
-    "scripts/readable_titles.lua": "22349f6949bfdbde66ade39b2aacaebac099a3d1c8da438a99f1b905033eb976",
-    "scripts/skip_prompt.lua": "99fe6344d4f059f9a5bf770539e55833eeb3dd007515055b9a04cb39cb94269d",
-    "extensions/buffering_panel.lua": "508d36861071aeefa4a19ec86fca7b8103b57df7afe475741628c65a7ce7e368",
-    "extensions/network_seek.lua": "bfe7834c4dfe2e982dbc26fc6e8c07ea64bdb5c9c5b00feaea929928b734bc79",
-    "extensions/network_state.lua": "4d5235e15affbc0310d323099e90ad3b5d4d19c3f0924db25e9302271c916398",
-    "extensions/ui_locale.lua": "60e17d0b28d1eaed8c44b13816d351554e0e194fe3b168893cbaa5c56898976a",
+    "scripts/readable_titles.lua": "86242d0e517d7e4ef8d0ab7f4f6ca73e4a8d2961204b83b56b219190fe669fc4",
+    "scripts/skip_prompt.lua": "7f7959cbf3da8fe66bc88b198f7446f7a18e3d3ca50c1018fbbd0353bf811ac1",
+    "extensions/buffering_panel.lua": "dacebd1589b2ed30fb00fddbcb9d60470de8e49656a70370f5c932be6ff09901",
+    "extensions/network_seek.lua": "923136ce85cc679394369d3e6da4ce0d212d92958f67000b03d9db6de46a7424",
+    "extensions/network_state.lua": "6edb0395f192cdd6d4b7697e7f179df089d74fbed58bec69fb966870a9ac6ffc",
+    "extensions/ui_locale.lua": "65e09d79676707ee96c563bd7e48092a02e614d66d82b3295b1029be284dd21f",
     "extensions/interface-translations.json": "1f43f39cf19cab84040b97f51f7aabde8811e7526e2ac6166292931b6e8e6571",
-    "scripts/network_playback.lua": "de586fe1ae2842ada054eae7200df451782404ed621fb0c1771417ccbcd4c412",
-    "scripts/player_ui.lua": "6f816a25bb551b33dc9af607bce8e29e1e27dcf0c2c1f71d30cb6eeb488964a7",
+    "scripts/network_playback.lua": "411f4cde71c0fd6818db68b75d1b5f8e7d253700e1f267d9f8929859969e469b",
+    "scripts/player_ui.lua": "ce8d744daff2d569ff6700a9ae77217bb1fd6ddbc414c21139fa6e2905aa2c92",
     "extensions/skip_transition.lua": "45c6d647e5bd7d6692fc340ad97381cf6ad3eca7daed5a58ab4a3d44d8e3f039",
-    "extensions/torrent_panel.lua": "4d7795b074a529ea7da034657db00616adc2da06c4da5077e1d4f34c03216d90"
+    "extensions/torrent_panel.lua": "dd2ac17a83527c6e111ac75b9c4d26f1cdd5b5419fd3016253073691d58dc871",
+    "extensions/text_metrics.lua": "50a2b6d10073341ec2bdbb4c624ceb27c9490972c434cef055d90eeecdb1b09a",
+    "extensions/time_format.lua": "cca18c6397ef0c013333ded64aeb4e1522fd661a432fa7376f4289be55413c0a",
+    "extensions/autocrop.lua": "b08b8002bc17621226c626de830a64ec07e606841443c50260f4334f4a94ec76",
+    "extensions/playback_preferences.lua": "91eba26eb6270d2ca20b535936cc9c106e84d762c8c52d4578f3a6232b1b2abb",
+    "extensions/async_requests.lua": "950eeaac3dd51db7ed6719fb9b8a84deb4b091e00a7e64ae5483c3630edce757"
   }
 }

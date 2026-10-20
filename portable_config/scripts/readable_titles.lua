@@ -69,7 +69,8 @@ local function publish(data,title,episode_title,episodes)
     if episode_title then display_details.episode_title=episode_title end
     if episodes then display_details.episodes=episodes end
     mp.set_property_native('user-data/readable-title',{text=text,language=language,
-        source_title=data.title,title=display_details.title,season=data.season,episodes=display_details.episodes})
+        source_title=data.title,title=display_details.title,tmdb_id=data.tmdb_id,season=data.season,
+        tmdb_season=data.tmdb_season or data.season,tmdb_offset=data.tmdb_offset or 0,episodes=display_details.episodes})
     mp.set_property('title',text..' - mpv+')
 end
 local function identity()
@@ -106,7 +107,8 @@ local function refresh()
     local gen=generation
     publish(data,data.source=='lampa' and data.title or nil,data.episode_title)
     if data.unresolved_context then return end
-    if data.source=='lampa' and (data.kind=='movie' or data.episode_title) then return end
+    -- Even a named launch entry needs the season dictionary for its siblings.
+    if data.source=='lampa' and data.kind=='movie' then return end
     local fallback_title=local_title(data,lang)
     if fallback_title then publish(data,fallback_title) end
     if not opts.online or data.title=='' or not token or token=='' then return end
@@ -122,12 +124,7 @@ local function refresh()
     local function resolved(id)
         if gen~=generation or not id then return end
         local endpoint=data.kind..'/'..id
-        get(endpoint..'?language='..locale,function(details)
-            if gen~=generation then return end
-            if not details then anime_fallback();return end
-            local title=local_title(data,lang) or details.name or details.title
-            publish(data,title)
-            if lang=='ru' and title and (local_title(data,lang) or not title:find('[\208\209]')) then anime_fallback() end
+        local function season_names(title)
             if data.kind=='tv' and data.episode and (data.season~=nil or data.source~='lampa') then
                 get(endpoint..'/season/'..(data.tmdb_season or data.season or 1)..'?language='..locale,function(season)
                     if gen~=generation or not season then return end
@@ -140,6 +137,14 @@ local function refresh()
                     publish(data,display_details.title or title,episode_title,episodes)
                 end)
             end
+        end
+        get(endpoint..'?language='..locale,function(details)
+            if gen~=generation then return end
+            if not details then anime_fallback();season_names(display_details.title or data.title);return end
+            local title=local_title(data,lang) or details.name or details.title
+            publish(data,title)
+            if lang=='ru' and title and (local_title(data,lang) or not title:find('[\208\209]')) then anime_fallback() end
+            season_names(title)
         end)
     end
     if data.tmdb_id then resolved(data.tmdb_id);return end
@@ -194,6 +199,10 @@ local function clear()
 end
 mp.register_event('start-file',clear)
 mp.register_event('end-file',clear)
+mp.register_event('shutdown',function()
+    if timer then timer:kill();timer=nil end
+    generation=generation+1;cancel()
+end)
 mp.register_event('file-loaded',function() active=true;schedule() end)
 mp.observe_property('user-data/interface-language','string',schedule)
 mp.observe_property('media-title','string',schedule)

@@ -1,6 +1,9 @@
 return function(path)
     local real=mp
+    local expand=mp.command_native
+    mp.command_native=function(a)return path(a[2]:gsub('^~~/?',''))end
     local panel=dofile(path('extensions/torrent_panel.lua'))
+    mp.command_native=expand
     local message='Loading [ReinForce] Dan Da Dan (S01) - 03.mkv...\nCurrent state: caching\nTorrent load info:\nSpeed: 97.46 Mbps\nCache: 0.10 / 0.10 GB\nPeers·Seeders: 16 / 41 · 14\n\n'
     local parsed=assert(panel.parse(message))
     assert(parsed.speed=='97.46 Mbps' and parsed.peers=='16 / 41 · 14','Keep TorrServer values')

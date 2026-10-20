@@ -31,6 +31,10 @@ local function check()
             end
             assert(count>=10,'Bottom row includes actual controls and speed')
             assert(Elements.timeline:get_visibility()==1 and Elements.timeline:render(),'Active seek rail stays rendered')
+            state.time_human='00:26:53';state.destination_time_human='-01:58:07'
+            local rail=Elements.timeline:render().text
+            assert(rail:find('26:53',1,true) and rail:find('1:58:07',1,true)
+                and not rail:find('00:26:53',1,true) and not rail:find('-01:58:07',1,true),'Timeline labels use compact unsigned clocks')
             state.has_audio=true
             for _,id in ipairs({'top_bar','volume'})do
                 local element=assert(Elements[id])
@@ -56,6 +60,10 @@ local function check()
             volume.proximity=0
             top.proximity=1;top.render_titles.main='Example title'
             assert(top:render().text:find('Example title',1,true),'Loaded media title remains visible on hover')
+            top.current_chapter={title='Hidden chapter',index=1}
+            state.chapters={{title='Hidden chapter',time=0},{title='Next chapter',time=30}}
+            local header=top:render().text
+            assert(not header:find('Hidden chapter',1,true) and not header:find('0:10',1,true),'No chapter or chapter timer in the upper panel')
             top.proximity=0
             Elements.curtain.opacity=1
             assert(Elements.controls:get_visibility()==0,'Menu still intercepts interactions')

@@ -1,5 +1,6 @@
 -- Local rendering and navigation adapters for upstream uosc.
 return function(script_directory)
+    local clock=dofile(mp.command_native({'expand-path','~~/'})..'/extensions/time_format.lua').clock
     local ui=dofile(mp.command_native({'expand-path','~~/extensions/ui_locale.lua'}))
     package.preload['lib/intl']=function()
         assert(loadfile(script_directory..'/lib/intl.lua'))()
@@ -22,6 +23,8 @@ return function(script_directory)
         local create=create_self_updating_menu_opener
         local fmt=dofile(mp.command_native({'expand-path','~~/extensions/title_format.lua'}))
         local anime=dofile(mp.command_native({'expand-path','~~/extensions/anime_identity.lua'}))
+        local lampa=dofile(mp.command_native({'expand-path','~~/extensions/lampa_context.lua'}))
+        local source=dofile(mp.command_native({'expand-path','~~/extensions/media_source.lua'}))
         function create_self_updating_menu_opener(opts)
             if opts.type=='sub' then
                 local serialize,activate,key=opts.serializer,opts.on_activate,opts.on_key
@@ -51,10 +54,18 @@ return function(script_directory)
                     local meta=mp.get_property_native('user-data/readable-title',{})
                     local lang=meta.language or 'ru'
                     for _,row in ipairs(rows) do
-                        local data=anime.enrich(row.title,fmt.parse(row.title))
+                        local entry=list[tonumber(row.value) or 0]
+                        local data=entry and lampa.current(row.title,entry.filename)
+                        data=data or anime.from_source(row.title,source.current(entry and entry.filename))
                         if data.title~='' or data.episode then
                             local same=meta.source_title and fmt.normalize(data.title)==fmt.normalize(meta.source_title)
+                            if meta.tmdb_id and data.tmdb_id then
+                                same=tonumber(meta.tmdb_id)==tonumber(data.tmdb_id)
+                                    and (data.tmdb_season or data.season)==(meta.tmdb_season or meta.season)
+                                    and (data.tmdb_offset or 0)==(meta.tmdb_offset or 0)
+                            end
                             local ep=same and data.season==meta.season and meta.episodes and meta.episodes[tostring(data.episode)]
+                            if same then data.season=meta.season;ep=meta.episodes and meta.episodes[tostring(data.episode)] end
                             row.title=fmt.label(data,lang,same and meta.title or nil,ep or nil)
                         end
                     end
@@ -78,9 +89,11 @@ return function(script_directory)
         end
     end
 
+    local menu_theme
     extend('Menu',function(Menu)
         local update=Menu.update
         function Menu:update(data) return update(self,ui.menu(data)) end
+        if menu_theme then menu_theme.menu(Menu) end
     end)
     local controls_always=false
     mp.observe_property('user-data/player-ui/controls-always','bool',function(_,value)
@@ -106,6 +119,7 @@ return function(script_directory)
         end
     end)
     local theme=dofile(mp.command_native({'expand-path','~~/extensions/uosc_theme.lua'}))(extend)
+    menu_theme=theme
     extend('Timeline', function(Timeline)
         dofile(mp.command_native({'expand-path','~~/extensions/network_seek.lua'}))(Timeline)
         local decide_enabled=Timeline.decide_enabled
@@ -126,8 +140,8 @@ return function(script_directory)
                 local width=text_width(tostring(n),opts)
                 if width>digit_width then widest,digit_width=tostring(n),width end
             end
-            local sample=format_time(math.max(5999,state.duration or 0),math.max(5999,state.duration or 0)):gsub('%d',widest)
-            local timestamp=text_width('-'..sample,opts)
+            local sample=clock(format_time(math.max(5999,state.duration or 0),math.max(5999,state.duration or 0))):gsub('%d',widest)
+            local timestamp=text_width(sample,opts)
             -- Keep generous clickable height while drawing a slim rail.
             local pad = math.min(timestamp + 20*s, self.width * 0.28)
             return self.ax + pad, self.bx - pad, self.by - self.size / 2
@@ -194,7 +208,7 @@ return function(script_directory)
                 local points={}
                 for _,segment in ipairs(skip.segments or {}) do
                     local a,b=segment.start,segment['end']
-                    if a and b and a>=0 and b>a and b<=state.duration+1 then
+                    if segment.kind~='preview' and a and b and a>=0 and b>a and b<=state.duration+1 then
                         ass:rect(t2x(a),cy-r,t2x(math.min(b,state.duration)),cy+r,
                             {color='FFD79C',opacity=(theme.glass() and 0.95 or 0.8)*visibility,radius=r})
                         for _,time in ipairs({a,b}) do
@@ -220,15 +234,15 @@ return function(script_directory)
             end
             ass:rect(px-2.5*s,cy-9*s,px+2.5*s,cy+9*s,{color='ffffff',radius=2.5*s,opacity=visibility})
             local opts={size=self.font_size,color='ffffff',border=0,border_color='000000',opacity=visibility}
-            ass:txt(self.ax+10*s,cy,4,state.time_human or '',opts)
-            ass:txt(self.bx-10*s,cy,6,state.destination_time_human or '',opts)
+            ass:txt(self.ax+10*s,cy,4,clock(state.time_human),opts)
+            ass:txt(self.bx-10*s,cy,6,clock(state.destination_time_human),opts)
 
             local rendered=false
             if (self.is_hovered or self.pressed) and not Elements:v('speed','dragging') then
                 local x=clamp(ax,cursor.x,bx)
                 local seconds=self:get_time_at_x(x)
                 local anchor={ax=x,ay=self.ay-3*s,bx=x,by=self.ay}
-                local human=format_time(seconds,state.duration)
+                local human=clock(format_time(seconds,state.duration))
                 anchor=ass:tooltip(anchor,human,{size=self.font_size,offset=2*s,margin=2*s,
                     timestamp=options.time_precision>0,width_overwrite=timestamp_width(human,{size=self.font_size})})
                 if not thumbnail.disabled and (not self.pressed or self.pressed.distance<5)

@@ -1,5 +1,5 @@
 return function(path)
-    local real=mp
+    local real,getenv=mp,os.getenv
     local options=package.loaded['mp.options']
     local utils=require 'mp.utils'
     local props={path='fixture.mkv',['media-title']='Reacher.S01E04.In.a.Tree.2160p.mkv',
@@ -134,7 +134,40 @@ return function(path)
             assert(props['user-data/readable-title'].text=='Истребитель демонов · Сезон '..case.season..', серия 3: Верная серия арки')
             events['end-file']()
         end
+        -- Lampa supplies only the selected episode; one season response must
+        -- also name siblings, even when that selected episode already has a name.
+        local anchor='http://localhost/stream?link='..string.rep('a',40)..'&index=1&play'
+        local files={{id=1,path='MobLand_S01E01_RHS_4K_[scarfilm].mkv'},{id=2,path='MobLand_S01E02_RHS_4K_[scarfilm].mkv'}}
+        os.getenv=function(k)
+            if k=='MPV_PLUS_LAMPA_CONTEXT' then return utils.format_json({version=1,source='lampa',entries={{url=anchor,identity={
+                title='Гангстерленд',original_title='MobLand',kind='tv',tmdb_id=247718,season=1,episode=1,episode_title='Пан или пропал',
+            }}}}) end
+            return getenv(k)
+        end
+        props.path=anchor;props['media-title']=files[1].path;props.playlist={{filename=anchor,title=files[1].path}}
+        props['user-data/torrserver-context']={media=anchor,path=files[1].path,files=files}
+        props['user-data/guessit']={}
+        dofile(path('scripts/readable_titles.lua'))
+        local before=#requests
+        events['file-loaded']();tick()
+        assert(props['user-data/readable-title'].text=='Гангстерленд · Сезон 1, серия 1: Пан или пропал')
+        assert(requests[before+1].args.args[#requests[before+1].args.args]:find('/tv/247718?',1,true),'Use the verified card ID')
+        respond(before+1,{name='Гангстерленд'})
+        respond(before+2,{episodes={{episode_number=1,name='Пан или пропал'},{episode_number=2,name='Пазл'}}})
+        assert(props['user-data/readable-title'].episodes['2']=='Пазл','Named Lampa entries still populate the whole season')
+        events['end-file']();props.path=anchor:gsub('index=1','index=2')
+        props['media-title']=files[2].path;props.playlist={{filename=props.path,title=files[2].path}}
+        props['user-data/torrserver-context']={media=props.path,path=files[2].path,files=files}
+        local cached=#requests;events['file-loaded']();tick()
+        assert(props['user-data/readable-title'].text=='Гангстерленд · Сезон 1, серия 2: Пазл','Sibling identity resolves to its actual episode name: '..utils.format_json(props['user-data/readable-title']))
+        assert(#requests==cached,'Episode changes reuse the season dictionary')
+        events['end-file']();props['user-data/interface-language']='en'
+        local failed_title=#requests;events['file-loaded']();tick()
+        requests[failed_title+1].callback(false,{status=7,stdout=''})
+        assert(requests[failed_title+2].args.args[#requests[failed_title+2].args.args]:find('/season/1?',1,true),'A failed series-title lookup must not block the season dictionary')
+        respond(failed_title+2,{episodes={{episode_number=2,name='Puzzle'}}})
+        assert(props['user-data/readable-title'].episodes['2']=='Puzzle','Sibling names remain available after a temporary series-title error')
     end,debug.traceback)
-    mp=real;package.loaded['mp.options']=options
+    mp,os.getenv=real,getenv;package.loaded['mp.options']=options
     assert(ok,err)
 end

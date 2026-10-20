@@ -59,6 +59,15 @@ return function(path)
         assert(named.url==stream.url and named.key==stream.key and named.index==12,
             'Official named M3U streams use the canonical metadata endpoint')
         assert(not source.stream(media:gsub('/stream%?', '/stream/nested/file?',1)), 'Do not accept arbitrary nested routes')
+        local auth=source.authorize(stream,{scheme='https',host='user:pass@remote.example',port='443'})
+        assert(auth.url:find('https://user:pass@remote.example/',1,true)==1 and auth.key==stream.key,'Configured credentials apply to the playing origin')
+        for _,server in ipairs({{scheme='http',host='user:pass@remote.example',port='443'},
+            {scheme='https',host='user:pass@other.example',port='443'},
+            {scheme='https',host='user:pass@remote.example',port='8443'}})do
+            assert(source.authorize(stream,server).url==stream.url,'Never send credentials across schemes, hosts or ports')
+        end
+        local explicit=source.stream(media:gsub('remote.example','own:secret@remote.example'))
+        assert(source.authorize(explicit,{scheme='https',host='user:pass@remote.example',port='443'}).url==explicit.url,'Explicit stream credentials take precedence')
         assert(stream.origin=='https://remote.example/torrserver' and stream.index==12)
         assert(stream.url=='https://remote.example/torrserver/stream?link='..hash..'&token=fixture&stat')
         local encoded=source.stream('edl://!new_stream;%200%'..media..';!new_stream;https://audio.example/track;')
@@ -113,13 +122,22 @@ return function(path)
         local pending=requests[#requests]
         assert(pending.url:find('another.example',1,true))
         pending.callback(false,{status=28,stdout=''})
-        tick()
         assert(source.current().unavailable and not state.season,'A failed lookup must not silently become season one')
+        local before_retry=#requests;tick()
+        assert(#requests==before_retry+1 and source.current().pending,'Temporary metadata failures retry on the same playing origin')
+        requests[#requests].callback(false,{status=28,stdout=''})
+        tick();requests[#requests].callback(false,{status=28,stdout=''})
+        local exhausted=#requests;tick();tick()
+        assert(#requests==exhausted and source.current().unavailable,'Metadata retries are bounded')
         assert(not props['user-data/readable-title'].text:find('Сезон 1',1,true))
         props.playlist[5].title='Kimetsu no Yaiba S01E08.mkv';props['media-title']=props.playlist[5].title
         emit('file-loaded');tick();tick()
         assert(not props['user-data/readable-title'].text:find('Сезон 1',1,true),'A timeout must not restore the S01 fallback from a generic filename')
         assert(not state.season and not state.loaded,'A timeout must not enable season-one auto-skips')
+        requests[#requests].callback(true,{status=0,stdout=utils.format_json({hash=hash,name='Kimetsu no Yaiba - Hashira Geiko Hen [TV-4]',
+            file_stats={{id=12,path='Kimetsu no Yaiba - Hashira Geiko Hen [TV-4]/'..raw}}})})
+        tick()
+        assert(source.current().path and not source.current().unavailable,'Opening another episode can recover an exhausted torrent lookup')
     end,debug.traceback)
     mp,os.getenv,package.path,file_load=real,getenv,old_path,old_file_load
     utils.subprocess=subprocess;__tidb_debug=nil

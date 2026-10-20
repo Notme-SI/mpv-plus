@@ -17,3 +17,23 @@ if ok and ffi.os == 'Windows' and not mp.get_property_native('user-data/frontend
         end
     end
 end
+
+-- Cancel our thumbnail subprocess before upstream closes its IPC pipe. A child
+-- stuck on a network read must not keep the player executable or pipe open.
+local native_async=mp.command_native_async
+local children,closing={},false
+mp.command_native_async=function(args,callback)
+    if type(args)~='table' or args.name~='subprocess' or args.detach then return native_async(args,callback) end
+    local id,completed
+    id=native_async(args,function(...)
+        completed=true;if id then children[id]=nil end
+        if not closing and callback then callback(...) end
+    end)
+    if not completed then children[id]=true end
+    return id
+end
+mp.register_event('shutdown',function()
+    closing=true
+    for id in pairs(children)do mp.abort_async_command(id)end
+    children={}
+end)

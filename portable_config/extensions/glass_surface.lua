@@ -5,7 +5,7 @@ local function alpha(opacity)
 end
 local function shape(ass,color,opacity,blur,border,clip,draw)
     ass:new_event()
-    ass:append(string.format('{\\an7\\pos(0,0)\\bord%.2f\\shad0\\blur%.2f\\1c&H%s&\\1a&H%02X&\\3c&H%s&\\3a&H%02X&%s}',
+    ass:append(string.format('{\\rDefault\\an7\\pos(0,0)\\alpha&H00&\\bord%.2f\\shad0\\blur%.2f\\1c&H%s&\\1a&H%02X&\\3c&H%s&\\3a&H%02X&%s}',
         border or 0,blur or 0,color,alpha(border and border>0 and 0 or opacity),color,alpha(opacity),clip or ''))
     ass:draw_start();draw();ass:draw_stop()
 end
@@ -42,6 +42,25 @@ local function bevel(ass,cx,cy,r,a,b,width)
     arc(ass,cx,cy,r-width/2,b,a,true)
     ass:line_to(cx+math.cos(a)*(r+width/2),cy+math.sin(a)*(r+width/2))
 end
+-- Large menu panes share the buttons' soft side reflections and fine bevel.
+-- Keep the centre evenly shaded so settings remain legible over bright scenes.
+function M.menu(ass,box,scale,visibility,radius)
+    local x0,y0,x1,y1=box.x0,box.y0,box.x1,box.y1
+    local w,h=x1-x0,y1-y0
+    local r=math.max(0,math.min(radius,w/2,h/2))
+    local clip='\\clip(1,'..rounded_path(x0,y0,x1,y1,r)..')'
+    shape(ass,'12171C',.42*visibility,0,nil,nil,function()ass:round_rect_cw(x0,y0,x1,y1,r)end)
+    shape(ass,'FFFFFF',.12*visibility,math.min(w,h)*.16,nil,clip,function()
+        oval(ass,x0+w*.05,y0+h*.18,w*.24,h*.38)
+    end)
+    shape(ass,'FCE7C3',.07*visibility,math.min(w,h)*.14,nil,clip,function()
+        oval(ass,x1-w*.04,y1-h*.12,w*.20,h*.26)
+    end)
+    local inset=.5*scale
+    shape(ass,'FFFFFF',.26*visibility,0,.75*scale,nil,function()
+        ass:round_rect_cw(x0+inset,y0+inset,x1-inset,y1-inset,math.max(0,r-inset))
+    end)
+end
 function M.panel(ass,box,scale,visibility,radius,hover)
     if visibility<=0 then return end
     local x0,y0,x1,y1=box.x0,box.y0,box.x1,box.y1
@@ -50,10 +69,15 @@ function M.panel(ass,box,scale,visibility,radius,hover)
     local cx,cy=(x0+x1)/2,(y0+y1)/2
     local circular=math.abs(w-h)<scale*2 and r>=h*.45
     if not circular then
-        -- Wide titles, badges and speed pills need an even translucent surface.
-        -- Side-clipped reflections create visible seams across these shapes.
-        shape(ass,'000000',.34*visibility,0,nil,nil,function() ass:round_rect_cw(x0,y0,x1,y1,r) end)
-        shape(ass,'FFFFFF',.20*visibility,0,.55*scale,nil,function() ass:round_rect_cw(x0,y0,x1,y1,r) end)
+        -- A single even pane avoids clipped glow bands on shallow headers.
+        -- Draw the rim inside the pane so no reflection bleeds above/below it.
+        shape(ass,'12171C',(hover and .28 or .24)*visibility,0,nil,nil,function()
+            ass:round_rect_cw(x0,y0,x1,y1,r)
+        end)
+        local inset=.4*scale
+        shape(ass,'FFFFFF',.24*visibility,0,.6*scale,nil,function()
+            ass:round_rect_cw(x0+inset,y0+inset,x1-inset,y1-inset,math.max(0,r-inset))
+        end)
         return
     end
     local path=rounded_path(x0,y0,x1,y1,r)

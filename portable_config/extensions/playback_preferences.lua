@@ -31,7 +31,9 @@ function M.network(path)
     return path:match('^https?://')~=nil or (path:match('^edl://')~=nil and path:find('https?://')~=nil)
 end
 function M.retry(state,reason)
-    if not state or not M.network(state.path) then return false end
+    if not state or not M.network(state.path) or state.cancelled or state.intentional_end then return false end
+    -- Decoder errors at EOF must not replay the last two seconds forever.
+    if state.loaded and state.duration and state.duration>0 and state.time and state.time>=state.duration-3 then return false end
     if reason=='error' then return true end
     return reason=='eof' and state.loaded and state.seekable and state.duration and state.duration>0
         and state.time>0 and state.time<state.duration-10 and not state.intentional_end

@@ -31,7 +31,9 @@ function M.parse(raw)
         s=s:match('^[^?#]+') or s
         s=s:match('([^/]+)$') or s
         if s=='stream' then s='' end
-    elseif s:find('\\',1,true) then s=s:match('([^\\]+)$') or s end
+    elseif s:find('\\',1,true) or s:find('/',1,true) and (s:lower():find('%.mkv') or s:lower():find('%.mp4')) then
+        s=s:match('([^/\\]+)$') or s
+    end
     -- A failed server lookup can leave a query after the filename in playlist titles.
     s=s:gsub('(%.[mM][kK][vV])[?#].*$','%1'):gsub('(%.[mM][pP]4)[?#].*$','%1')
     s=s:gsub('%.[mM][kK][vV]$',''):gsub('%.[mM][pP]4$',''):gsub('%.[aA][vV][iI]$','')
@@ -57,7 +59,10 @@ function M.parse(raw)
         end
     else
         a,b,season=s:find('[Ss]eason%s+(%d+)')
-        if not a then a,b,season=s:find('Сезон%s+(%d+)') end
+        if not a then a,b,season=s:find('%f[%d](%d+)%s+сезон') end
+        if not a then a,b,season=s:find('%f[%d](%d+)%s+Сезон') end
+        if not a then a,b,season=s:find('Сезон%s+(%d+)%f[%W]') end
+        if not a then a,b,season=s:find('сезон%s+(%d+)%f[%W]') end
         if a then out.season,out.kind=tonumber(season),'tv';s=s:sub(1,a-1):gsub('%s*/%s*$','') end
         if not a then
             a,b,episode=s:find('%s%-%s*(%d%d?%d?%d?)%f[%D]')
@@ -91,6 +96,7 @@ function M.parse(raw)
     out.title=trim(s):gsub('%s*/%s*$','')
     out.episode_title=out.episode_title and trim(out.episode_title) or nil
     if out.episode_title=='' then out.episode_title=nil end
+    if out.episode_title and out.episode_title:lower():match('^rhs%s*%d*[kK]?$') then out.episode_title=nil end
     return out
 end
 local languages={rus='ru',eng='en',ukr='uk',jpn='ja',deu='de',ger='de',fra='fr',fre='fr',spa='es',ita='it',

@@ -10,7 +10,7 @@ unsigned int GetDpiForWindow(void*);
 int GetSystemMetricsForDpi(int,unsigned int);
 int GetSystemMetrics(int);
 int IsWindowVisible(void*);
-intptr_t SendMessageW(void*,unsigned int,uintptr_t,intptr_t);
+intptr_t SendMessageTimeoutW(void*,unsigned int,uintptr_t,intptr_t,unsigned int,unsigned int,uintptr_t*);
 int DestroyIcon(void*);
 ]]
 local user=ffi.load('user32')
@@ -31,6 +31,12 @@ local function icon(width,height)
 end
 local pid=require('mp.utils').getpid()
 local applied={}
+local function message(window,id,wparam,lparam)
+    local result=ffi.new('uintptr_t[1]')
+    -- Window teardown must not leave a script waiting on the GUI thread.
+    if user.SendMessageTimeoutW(window,id,wparam,lparam,0x22,100,result)==0 then return end
+    return ffi.cast('intptr_t',result[0])
+end
 local callback=ffi.cast('int (__stdcall *)(void*,intptr_t)',function(window)
     local process=ffi.new('unsigned long[1]')
     user.GetWindowThreadProcessId(window,process)
@@ -40,12 +46,12 @@ local callback=ffi.cast('int (__stdcall *)(void*,intptr_t)',function(window)
         local small=icon(metric(49,dpi),metric(50,dpi))
         local large=icon(metric(11,dpi),metric(12,dpi))
         if small==nil or large==nil or applied[tostring(window)]==dpi then return 1 end
-        user.SendMessageW(window,0x80,0,ffi.cast('intptr_t',small))
-        user.SendMessageW(window,0x80,1,ffi.cast('intptr_t',large))
-        applied[tostring(window)]=dpi
-        mp.set_property_native('user-data/window-icon-applied',
-            user.SendMessageW(window,0x7F,0,0)==ffi.cast('intptr_t',small)
-            and user.SendMessageW(window,0x7F,1,0)==ffi.cast('intptr_t',large))
+        message(window,0x80,0,ffi.cast('intptr_t',small))
+        message(window,0x80,1,ffi.cast('intptr_t',large))
+        local correct=message(window,0x7F,0,0)==ffi.cast('intptr_t',small)
+            and message(window,0x7F,1,0)==ffi.cast('intptr_t',large)
+        if correct then applied[tostring(window)]=dpi end
+        mp.set_property_native('user-data/window-icon-applied',correct)
     end
     return 1
 end)

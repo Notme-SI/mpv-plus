@@ -2,6 +2,7 @@
 return function(extend)
     local ui=dofile(mp.command_native({'expand-path','~~/extensions/ui_locale.lua'}))
     local glass=dofile(mp.command_native({'expand-path','~~/extensions/glass_surface.lua'}))
+    local metrics=dofile(mp.command_native({'expand-path','~~/'})..'/extensions/text_metrics.lua').new()
     local T={mode='glass',marks=true,metadata={badges={}}}
     function T.glass() return T.mode=='glass' end
     mp.observe_property('user-data/player-ui','native',function(_,value)
@@ -92,7 +93,7 @@ return function(extend)
             local padding=round(self.font_size/2)
             if state.has_playlist then
                 local text=state.playlist_pos..'/'..state.playlist_count
-                local width=text_width(text,{size=self.font_size})+padding*2
+                local width=metrics.width(text,self.font_size,config.font,options.font_bold)+padding*2
                 local box={ax=x,ay=y,bx=x+width,by=by-margin}
                 T.header(ass,box,visibility,true)
                 ass:txt(x+width/2,(box.ay+box.by)/2,5,text,{size=self.font_size,
@@ -103,7 +104,7 @@ return function(extend)
             local row_x=x
             local function title(text,size,height,toggle)
                 if state.is_idle or not text or text=='' or limit-x<size*3 then return end
-                local width=math.min(text_width(text,{size=size})+padding*2,limit-x)
+                local width=math.min(metrics.width(text,size,config.font,options.font_bold)+padding*2,limit-x)
                 local box={ax=x,ay=y,bx=x+width,by=y+height}
                 T.header(ass,box,visibility)
                 ass:txt(x+padding,y+height/2,4,text,{size=size,color='ffffff',border=0,
@@ -111,6 +112,7 @@ return function(extend)
                     clip=string.format('\\clip(%d,%d,%d,%d)',math.floor(x),math.floor(y),math.floor(box.bx-padding/2),math.ceil(box.by))})
                 if toggle then cursor:zone('primary_click',box,function() self:toggle_title() end) end
                 y=box.by+3*s
+                return box
             end
             if options.top_bar_title~='no' then
                 title(self.render_titles.main,self.font_size,self.size-2*margin,options.top_bar_alt_title_place=='toggle')
@@ -119,15 +121,8 @@ return function(extend)
                 end
             else y=by end
             local badges={}
-            if self.current_chapter then
-                badges[#badges+1]={kind='chapter',text=ui.chapter_text(self.current_chapter.title)}
-            end
-            for _,badge in ipairs(T.metadata.summary or T.metadata.badges or {}) do badges[#badges+1]=badge end
-            if #badges>0 and state.duration and state.time then
-                local next_chapter=self.current_chapter and state.chapters[self.current_chapter.index+1]
-                local ending=next_chapter and next_chapter.time or state.duration
-                local time=(state.time-ending)/(options.destination_time=='time-remaining' and 1 or state.speed)
-                badges[#badges+1]={kind='time',text=format_time(time,math.abs(time))}
+            for _,badge in ipairs(T.metadata.summary or T.metadata.badges or {})do
+                if badge.kind~='chapter' and badge.kind~='timer' then badges[#badges+1]=badge end
             end
             -- Metadata remains visible without chapters. Wrap badges in small windows.
             local size=math.max(12*s,round(self.font_size*0.77))
@@ -137,19 +132,17 @@ return function(extend)
             x=row_x
             for _,badge in ipairs(badges) do
                 local text=ass_escape(badge.text)
-                local width=text_width(text,{size=size})+12*s
-                if badge.kind=='chapter' then width=math.min(width,185*s) end
-                width=math.min(width,self.bx-margin-row_x)
-                if x+width>self.bx-margin and x>row_x then x=row_x;y=y+height+3*s end
+                local icon=({video='local_movies',audio='graphic_eq'})[badge.kind]
+                local icon_width=icon and 22*s or 0
+                local width=metrics.width(badge.text,size,config.font,options.font_bold)+12*s+icon_width
+                width=math.min(width,limit-row_x)
+                if x+width>limit and x>row_x then x=row_x;y=y+height+3*s end
                 local box={ax=x,ay=y,bx=x+width,by=y+height}
                 T.header(ass,box,visibility)
-                ass:txt(x+6*s,y+height/2,4,text,{size=size,color='ffffff',border=0,
+                if icon then ass:icon(x+13*s,y+height/2,18*s,icon,{color='d4d4d4',opacity=visibility,border=0}) end
+                ass:txt(x+6*s+icon_width,y+height/2,4,text,{size=size,color='ffffff',border=0,
                     border_color='000000',opacity=visibility,wrap=2,
                     clip=string.format('\\clip(%d,%d,%d,%d)',math.floor(x),math.floor(y),math.floor(box.bx-3*s),math.ceil(box.by))})
-                if badge.kind=='chapter' then
-                    cursor:zone('primary_click',box,function() mp.command('script-binding uosc/chapters') end)
-                    if get_point_to_rectangle_proximity(cursor,box)<=0 then ass:tooltip(box,text) end
-                end
                 x=box.bx+3*s
             end
             self.title_by=#badges>0 and y+height or y
@@ -157,5 +150,44 @@ return function(extend)
             return ass
         end
     end)
+    function T.menu(Menu)
+        local render=Menu.render
+        function Menu:render()
+            local factory=assdraw.ass_new
+            assdraw.ass_new=function(...)
+                local ass=factory(...)
+                local rect=ass.rect
+                ass.rect=function(target,ax,ay,bx,by,opts)
+                    if opts and opts.color==bg and opts.radius~=nil and not opts.clip then
+                        local visibility=opts.opacity/math.max(.01,config.opacity.menu)
+                        if T.glass() then
+                            glass.menu(target,{x0=ax,y0=ay,x1=bx,y1=by},state.scale,visibility,opts.radius)
+                        else rect(target,ax,ay,bx,by,{color='000000',radius=opts.radius,opacity=.52*visibility}) end
+                    elseif T.glass() and opts and opts.color==fg and opts.radius~=nil then
+                        local copy={};for k,v in pairs(opts)do copy[k]=v end
+                        copy.border=.65*state.scale;copy.border_color='ffffff'
+                        copy.opacity={main=math.min(opts.opacity,.22*self.opacity),
+                            border=math.min(.42*self.opacity,opts.opacity+.10*self.opacity)}
+                        rect(target,ax,ay,bx,by,copy)
+                    else rect(target,ax,ay,bx,by,opts) end
+                end
+                for _,name in ipairs({'txt','icon'})do
+                    local draw=ass[name]
+                    ass[name]=function(target,x,y,a,b,opts)
+                        if T.glass() and opts and (opts.color==fgt or opts.color==bg)then
+                            local copy={};for k,v in pairs(opts)do copy[k]=v end
+                            copy.color='ffffff';opts=copy
+                        end
+                        return draw(target,x,y,a,b,opts)
+                    end
+                end
+                return ass
+            end
+            local ok,result=pcall(render,self)
+            assdraw.ass_new=factory
+            if not ok then error(result) end
+            return result
+        end
+    end
     return T
 end

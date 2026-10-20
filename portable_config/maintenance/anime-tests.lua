@@ -29,6 +29,12 @@ return function(path)
         assert(tostring(identity.mal_id)==case.mal and identity.season==case.season,'Named torrent arc must beat an inferred first season')
         assert(identity.episode==3 and identity.tmdb_season==case.season and identity.tmdb_episode==3,'Use the same coordinates for title and skip providers')
     end
+    for _,raw in ipairs({'Kimetsu no Yaiba TV-4 - 05.mkv','Kimetsu no Yaiba [TV-4] - 05.mkv',
+        '[VLD] Kimetsu no Yaiba TV-4 [WEBRip 1080p]/Kimetsu no Yaiba TV-4 - 05.mkv',
+        'Kimetsu no Yaiba - Hashira Geiko Hen/Kimetsu no Yaiba - Hashira Geiko Hen - 05 (WEBRip 1920x1080 x264 AAC Rus + Jap).mkv'})do
+        local identity=anime.from_source(raw,{path=raw},arcs)
+        assert(tostring(identity.mal_id)=='55701' and identity.tmdb_season==5 and identity.episode==5,'Actual TV-4 release must map to Hashira, not TMDB season one/four: '..raw..' '..require('mp.utils').format_json(identity))
+    end
     for _,name in ipairs({'02.Trainer.Sakonji.Urokodaki.mkv','02.mkv'}) do
         local data=anime.from_source(name,{path='Kimetsu no Yaiba/'..name},demon)
         assert(data.mal_id=='38000' and data.episode==2,'Resolve episode-only files from their folder')
@@ -51,7 +57,7 @@ return function(path)
         {time=1379,title='next notice'}}
     local themed_native=skips.from_chapters(themed,1380,fmt.normalize)
     assert(themed_native.intro[1].start_ms==32000 and themed_native.credits[1].start_ms==1289000
-        and themed_native.preview[1].start_ms==1379000,'Recognize theme and next-notice chapter names')
+        and not themed_native.preview,'Opening/ending chapter times remain; next-notice is never skippable')
     assert(not next(skips.from_chapters({{time=0,title='Part 01'},{time=90,title='Part 02'}},1440,fmt.normalize)))
     assert(not next(skips.from_chapters({{time=0,title='Opening'}},1440,fmt.normalize)),'Unknown intro end is unsafe')
     assert(not next(skips.from_chapters({{time=0,title='Opening'},{time=700,title='Episode'}},1440,fmt.normalize)))
@@ -67,9 +73,12 @@ return function(path)
     local valid=skips.flatten({intro={{end_ms=90000},{start_ms=0},{start_ms=0,end_ms=0},
         {start_ms=35000,end_ms=150000},{start_ms=35100,end_ms=150100}},
         credits={{start_ms=1400000,end_ms=1550000}},preview={{start_ms=1420000}}},1440)
-    assert(#valid==2 and valid[1].start==35 and valid[1]['end']==150 and valid[2]['end']==1440,
-        'Reject incomplete or out-of-range times, deduplicate, permit an explicit final preview')
+    assert(#valid==1 and valid[1].start==35 and valid[1]['end']==150,
+        'Reject incomplete or out-of-range times, deduplicate and ignore all previews')
     assert(not skips.validate('intro',{start_ms=0/0,end_ms=90000},1440),'Reject NaN')
+    assert(not skips.validate('preview',{start_ms=1420000,end_ms=1440000},1440),'Explicit previews cannot be skipped')
+    local tail=skips.flatten({credits={{start_ms=1300000}},preview={{start_ms=1400000}}},1440)
+    assert(#tail==1 and tail[1].kind=='credits' and tail[1]['end']==1400,'Open-ended credits must stop before a known preview')
     local opening=skips.flatten({recap={{start_ms=0,end_ms=60000}},intro={{start_ms=60000,end_ms=150000}},
         credits={{start_ms=150000,end_ms=240000},{start_ms=1300000,end_ms=1390000}}},1440)
     assert(#opening==3 and opening[3].start==1300,'An early online ED must not cause a third skip after recap and OP')
@@ -112,7 +121,7 @@ return function(path)
         local ui=dofile(path('extensions/ui_locale.lua'))
         dofile(path('scripts/skip_prompt.lua'))
         for kind,text in pairs({intro={'Пропустить: Заставку','Skip: Intro'},credits={'Пропустить: Титры','Skip: Credits'},
-            recap={'Пропустить: Ранее в сериале','Skip: Recap'},preview={'Пропустить: Анонс','Skip: Preview'}}) do
+            recap={'Пропустить: Ранее в сериале','Skip: Recap'}}) do
             props['user-data/interface-language']='ru'
             observers['user-data/skip-prompt'](nil,{kind=kind,start=63,['end']=153})
             assert(overlay.data:find(text[1],1,true),'Russian prompt '..kind)
@@ -130,7 +139,7 @@ return function(path)
         observers['user-data/skip-prompt'](nil,{})
         observers['time-pos']()
         assert(props['user-data/skip-prompt-visible'],'Normal updates must not erase the skip confirmation')
-        assert(overlay.data:find('Пропущено:',1,true),'Show the completed skip separately from an upcoming action')
+        assert(overlay.data:find('Автопропуск:',1,true),'Completed automatic skip keeps the action label')
         timer.fn();assert(not props['user-data/skip-prompt-visible'],'Confirmation expires')
     end,debug.traceback)
     mp=real;package.loaded['mpv-build/ui_locale']=saved

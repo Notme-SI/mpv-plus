@@ -180,11 +180,51 @@ local function enrich(data)
     data.source='lampa'
     return data
 end
-function M.current(raw)
-    local path=mp.get_property('path','')
+local function file_at(context,index)
+    for _,file in ipairs(context.files or {}) do if tonumber(file.id)==index and type(file.path)=='string' then return file.path end end
+end
+local function sibling(path,context)
+    local target=source.stream(path)
+    if not target or not target.index or type(context.files)~='table' then return end
+    local physical=file_at(context,target.index)
+    if not physical then return end
+    local parsed=fmt.parse(physical:match('[^/\\]+$') or physical)
+    if not parsed.episode or not parsed.season or parsed.season_inferred then return end
+    local function matches(title,card)
+        local name=fmt.normalize(title or '')
+        if #name<3 then return false end
+        for _,value in ipairs({card.title or '',card.original_title or '',unpack(card.aliases or {})}) do
+            if fmt.normalize(fmt.parse(value).title)==name then return true end
+        end
+        return false
+    end
+    for _,entry in ipairs(read()) do
+        local anchor=type(entry)=='table' and source.stream(entry.url or '')
+        local card=anchor and sanitize(entry.identity)
+        if anchor and anchor.key==target.key and card and card.kind=='tv' and (card.tmdb_id or card.imdb_id)
+            and not enrich(copy(card)).anime and card.season==parsed.season then
+            local name=file_at(context,anchor.index)
+            local original=name and fmt.parse(name:match('[^/\\]+$') or name)
+            -- Hash alone never proves a series: both file names must match the
+            -- card and explicitly agree on the season; keep each file's episode.
+            if original and not original.season_inferred and original.season==card.season
+                and original.episode==card.episode and matches(original.title,card) and matches(parsed.title,card) then
+                card.episode=parsed.episode;card.episode_title=nil
+                return {url=path,identity=card}
+            end
+        end
+    end
+end
+function M.current(raw,media)
+    local path=media or mp.get_property('path','')
     if path=='' then return end
     raw=raw or mp.get_property('media-title','')
     local context=mp.get_property_native and source.current() or {}
+    if media and media~=mp.get_property('path','') then
+        local target,active=source.stream(media),source.stream(context.media or '')
+        local file=target and active and target.key==active.key and file_at(context,target.index)
+        if file then context=copy(context);context.media=media;context.path=file else context={} end
+    end
     -- One current result per script: repeated title/skip updates need no new
     -- catalog scan. Late torrent data and file/title changes invalidate it.
     local key={path,raw,context.path or '',context.title or '',context.pending==true,context.unavailable==true}
@@ -199,8 +239,7 @@ function M.current(raw)
             if url(entry.url)==url(path) then matched=entry;break end
         end
     end
-    -- A shared torrent hash does not identify a file or its season. Metadata
-    -- supplied for a sibling is never reused for the current episode.
+    if not matched then matched=sibling(path,context) end
     if not matched then return end
     local data=sanitize(matched.identity)
     if not data then return end

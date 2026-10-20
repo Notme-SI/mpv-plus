@@ -13,7 +13,10 @@ return function(path)
     state.time=95;assert(not policy.retry(state,'eof'))
     state.time=30;state.intentional_end=true;assert(not policy.retry(state,'eof'))
     state.path='C:/video.mkv';assert(not policy.retry(state,'error'))
-    state.path='edl://!new_stream;http://localhost:8090/stream?link=abc';assert(policy.retry(state,'error'))
+    state.intentional_end=false;state.path='edl://!new_stream;http://localhost:8090/stream?link=abc';assert(policy.retry(state,'error'))
+
+    state.duration=100;state.time=99;assert(not policy.retry(state,'error'),'Errors at the end must not replay the tail')
+    state.time=30;state.cancelled=true;assert(not policy.retry(state,'error'),'Explicit cancellation suppresses further retries for this session')
 
     local real=mp
     local old_options,old_ui=package.loaded['mp.options'],package.loaded['mpv-build/ui_locale']
@@ -38,7 +41,7 @@ return function(path)
         register_script_message=function(k,fn) messages[k]=fn end,
         command_native=function() return path('') end,
         commandv=function(...) commands[#commands+1]={...} end,
-        add_timeout=timer,add_periodic_timer=function() return {kill=noop} end,
+        get_time=function()return 0 end,add_timeout=timer,add_periodic_timer=function() return {kill=noop} end,
         command_native_async=function(args,fn) requests[#requests+1]={args=args,fn=fn};return #requests end,
         abort_async_command=function(id) requests[id].aborted=true end,
     }
@@ -73,6 +76,18 @@ return function(path)
         emit('start-file',{playlist_entry_id=1});emit('file-loaded');ending('error')
         props['playlist-pos']=1;observers['playlist-pos']();local count=#commands;tick()
         assert(#commands==count and continued==6 and not bindings['cancel-reconnect'])
+        -- Esc remains a cancellation until the user starts a new entry.
+        emit('start-file',{playlist_entry_id=1});emit('file-loaded');ending('error')
+        assert(bindings['cancel-reconnect']);bindings['cancel-reconnect']()
+        count=#commands;tick();assert(#commands==count and not bindings['cancel-reconnect'])
+        ending('error');tick();assert(#commands==count,'Cancelling must not schedule another retry')
+        emit('start-file',{playlist_entry_id=1});emit('file-loaded')
+        props['user-data/skip-finish']={path=props.path,id=1};ending('error');tick()
+        assert(#commands==count and props['user-data/network-playback'].state=='idle','Terminal skip intent must outrank a stale time-pos')
+        props['user-data/skip-finish']={};props['time-pos']=99
+        emit('start-file',{playlist_entry_id=1});emit('file-loaded');ending('error');tick()
+        assert(#commands==count,'Natural decoder EOF errors must not replay the last two seconds')
+        props['time-pos']=30
         -- Cancelling an on-demand diagnostic rejects even a late subprocess response.
         local before=#requests
         props['playlist-pos']=0;bindings.menu();assert(#requests==before+1)

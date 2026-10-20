@@ -6,12 +6,14 @@ local function finite(value)
 end
 -- Unknown starts/ends must never turn into an invented opening at 00:00.
 function M.validate(kind,segment,duration)
+    -- Previews remain ordinary video, regardless of cached API data or preferences.
+    if kind~='intro' and kind~='recap' and kind~='credits' then return end
     local start=finite(segment.start_ms)
     local finish=finite(segment.end_ms)
     duration=finite(duration) or 0
     if not start or start<0 then return end
     start=start/1000
-    if (not finish or finish==0) and (kind=='credits' or kind=='preview') and duration>0 then
+    if (not finish or finish==0) and kind=='credits' and duration>0 then
         finish=duration*1000
     end
     if not finish then return end
@@ -26,11 +28,23 @@ function M.validate(kind,segment,duration)
 end
 function M.flatten(data,duration)
     local result={}
-    for _,kind in ipairs({'intro','recap','credits','preview'}) do
+    for _,kind in ipairs({'intro','recap','credits'}) do
         for _,segment in ipairs(type(data[kind])=='table' and data[kind] or {}) do
             if type(segment)=='table' then
                 local valid=M.validate(kind,segment,duration)
-                if valid then result[#result+1]=valid end
+                if valid and kind=='credits' then
+                    -- An open-ended or overlapping credits interval must never
+                    -- absorb a separately marked preview after the credits.
+                    for _,preview in ipairs(type(data.preview)=='table' and data.preview or {})do
+                        local start=type(preview)=='table' and finite(preview.start_ms)
+                        local finish=type(preview)=='table' and finite(preview.end_ms)
+                        if start and start>=0 and start/1000<valid['end']
+                            and (not finish or finish==0 or finish/1000>valid.start)then
+                            valid['end']=math.min(valid['end'],start/1000)
+                        end
+                    end
+                end
+                if valid and valid['end']>valid.start then result[#result+1]=valid end
             end
         end
     end
@@ -121,5 +135,40 @@ function M.combine(remote,anime,native)
     for k,v in pairs(next(anime or {}) and anime or remote or {}) do combined[k]=v end
     for k,v in pairs(native or {}) do combined[k]=v end
     return combined
+end
+-- Combine only neighbouring, explicitly recognised pairs. A real scene gap
+-- must remain playable; allow at most one second of timestamp rounding.
+function M.action(segments,segment,enabled,prefs)
+    local action={kind=segment.kind,start=segment.start,['end']=segment['end'],
+        kinds={segment.kind},members={segment}}
+    local automatic=enabled and prefs[segment.kind] or false
+    action.auto=automatic
+    for i,current in ipairs(segments)do
+        if current==segment then
+            local next_segment=segments[i+1]
+            if not next_segment or not segment['end'] then break end
+            local a,b=segment.kind,next_segment.kind
+            local opening=a=='recap' and b=='intro' or a=='intro' and b=='recap'
+            local gap=next_segment.start-segment['end']
+            local next_auto=enabled and prefs[b] or false
+            if gap>=-1 and gap<=1 and next_segment['end'] and next_segment['end']>segment['end']
+                and (automatic and next_auto and opening
+                    or not automatic and not next_auto and opening) then
+                action['end']=next_segment['end'];action.kinds[#action.kinds+1]=b
+                action.members[#action.members+1]=next_segment
+            end
+            break
+        end
+    end
+    return action
+end
+function M.caption(segment,automatic,language)
+    local en=language=='en'
+    local names=en and {intro='Intro',recap='Recap',credits='Credits',preview='Preview'}
+        or {intro=automatic and 'Заставки' or 'Заставку',recap='Ранее в сериале',credits='Титры',preview='Анонс'}
+    local labels={}
+    for _,kind in ipairs(segment.kinds or {segment.kind})do labels[#labels+1]=names[kind] or kind end
+    return (automatic and (en and 'Auto-skip: ' or 'Автопропуск: ') or (en and 'Skip: ' or 'Пропустить: '))
+        ..table.concat(labels,en and ' and ' or ' и ')
 end
 return M

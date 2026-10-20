@@ -1,4 +1,37 @@
 return function(path)
+    local clock=dofile(path('extensions/time_format.lua')).clock
+    for raw,label in pairs({['00:26:53']='26:53',['-01:58:07']='1:58:07',['00:00:00']='0:00',
+        ['-00:07:16']='7:16',['12:00:01']='12:00:01',['-00:00:04.500']='0:04.500'})do
+        assert(clock(raw)==label,'Compact clock: '..raw)
+    end
+    local network=dofile(path('extensions/network_state.lua'))
+    local single={Capacity=500,Filled=230,Torrent={file_stats={{id=1,length=1000}}}}
+    local time=network.cache_time(single,1,100)
+    assert(time.seconds==23 and time.target==50,'Convert current-file cached bytes using file duration and size')
+    single.Filled=460
+    assert(network.cache_time(single,1,100).seconds==46,'Cached seconds advance with downloaded bytes')
+    assert(not network.cache_time(single,1,0).seconds,'Unknown duration cannot produce invented seconds')
+    local multi={Capacity=500,Filled=9999,PiecesLength=100,Torrent={file_stats={{id=1,length=200},{id=2,length=1000}}},
+        Pieces={['0']={Size=100},['2']={Size=100},['3']={Size=50},['4']={Size=100},['12']={Size=100}}}
+    local selected=network.cache_time(multi,2,100)
+    assert(selected.seconds==25 and selected.target==50,'Exclude other torrent files and use selected episode size')
+    multi.Readers={{Reader=3,End=5}}
+    assert(network.cache_time(multi,2,100).seconds==15,'Exclude cached pieces behind the current network reader')
+    multi.Pieces['3'].Size=100
+    assert(network.cache_time(multi,2,100).seconds==20,'Count loaded bytes of incomplete pieces as they arrive')
+    multi.Readers={{Reader=4,End=5}}
+    assert(network.cache_time(multi,2,100).seconds==10,'Seeking excludes old cached ranges')
+    multi.Pieces=nil
+    assert(not network.cache_time(multi,2,100).seconds,'Never attribute whole-torrent Filled to one file')
+    assert(not network.cache_time({Filled=500},2,100,{file_size=1000}).seconds,'File size alone cannot identify torrent byte coverage')
+    local boundary={Capacity=100,PiecesLength=100,Torrent={file_stats={{id=1,length=150},{id=2,length=200}}},
+        Pieces={['1']={Size=100},['2']={Size=50},['3']={Size=100}}}
+    assert(network.cache_time(boundary,2,20).seconds==15,'Clip boundary pieces to the selected file')
+    local seconds,estimated=network.player_time(0,230,1000,100)
+    assert(seconds==23 and estimated,'Fallback uses forward packet bytes and average file bitrate')
+    seconds,estimated=network.player_time(7,230,1000,100)
+    assert(seconds==7 and not estimated,'Prefer native packet timestamp coverage when available')
+    assert(network.player_time(nil,0,1000,100)==nil,'Missing packet telemetry stays unavailable')
     local info=dofile(path('extensions/media_info.lua'))
     local function video(w,h,fps,codec) return {['demux-w']=w,['demux-h']=h,['demux-fps']=fps,codec=codec or 'hevc'} end
     local function badge(data,kind)
@@ -28,18 +61,31 @@ return function(path)
         mp={command_native=function()return path('')end,create_osd_overlay=function()return overlay end,
             get_osd_size=function()return w,h end}
         local panel=dofile(path('extensions/buffering_panel.lua')).new({language=function()return 'ru'end})
-        local sample={seconds=23,profile={seconds=50},progress=100,speed=2*1048576,
+        local sample={reason='seeking',seconds=23,profile={seconds=50},progress=100,speed=2*1048576,
             forward_bytes=8*1048576,back_bytes=12*1048576,media=rich,hwdec='no',dropped=0,avsync=-.015}
         panel.draw(sample)
-        assert(overlay.data:find('46 %',1,true) and not overlay.data:find('100 %',1,true),'Time coverage and loading progress are separate')
-        assert(overlay.data:find('Программное декодирование',1,true) and overlay.data:find('AAC',1,true),'Describe actual codecs and active decoding')
+        assert(overlay.data:find('46%',1,true) and not overlay.data:find('100%',1,true),'Time coverage and loading progress are separate')
+        assert(overlay.data:find('Буфер: 23 из 50 сек. (46%)  ',1,true) and overlay.data:find('16.8 Мбит/с',1,true),'Whole seconds and bytes/s converted to decimal Mbit/s')
+        assert(overlay.data:find('Статистика',1,true) and overlay.data:find('}speed',1,true) and overlay.data:find('Статус: перемотка',1,true),'Statistics heading and separate state')
+        assert(overlay.data:find('Декодер: программный',1,true) and overlay.data:find('AAC',1,true),'Describe actual codecs and active decoding')
         assert(overlay.data:find('-0.015',1,true),'Signed audio/video sync is retained')
+        sample.torrent=true;sample.stat={download_speed=1025000,buffer={seconds=23,target=50}}
+        panel.draw(sample)
+        assert(overlay.data:find('Буфер: 23 из 50 сек. (46%)  ',1,true) and overlay.data:find('download',1,true) and overlay.data:find('16.8 Мбит/с',1,true),'Pill reflects actual mpv cache and read speed')
+        sample.seconds=0;sample.stat.buffer={seconds=90,target=94};sample.stat.filled=100*1048576;sample.stat.capacity=100*1048576
+        panel.draw(sample)
+        assert(overlay.data:find('Буфер: 0 из 50 сек. (0%)',1,true) and overlay.data:find('100/100 МБ',1,true),'A full server cache must not masquerade as playable mpv buffer')
+        sample.seconds=23;panel.draw(sample)
+        assert(not overlay.data:find('TorrServer',1,true) and overlay.data:find('Загрузка:',1,true),'Compact statistics use the requested neutral heading')
+        assert(not overlay.data:find('≈',1,true) and not overlay.data:find('CPU',1,true),'No approximation sign or misleading CPU/FPS label')
+        sample.torrent=false;sample.stat=nil
+
         for _,size in ipairs({{640,360},{1920,1080},{3840,2160}})do
             w,h=size[1],size[2];panel.draw(sample)
             assert(overlay.res_x==w and overlay.res_y==h and not overlay.data:find('nan',1,true),'Scale to the actual OSD')
         end
         sample.seconds=nil;sample.speed=nil;sample.show_statistics=false;panel.draw(sample)
-        assert(overlay.data:find('Буфер —',1,true) and not overlay.data:find('0 %',1,true),'Missing telemetry is not a fake zero')
+        assert(overlay.data:find('Буфер: —',1,true) and not overlay.data:find('0%',1,true),'Missing telemetry is not a fake zero')
         sample.show_buffer=false;panel.draw(sample);assert(overlay.data=='','Disabled overlays leave no stale ASS')
     end,debug.traceback)
     mp=native_mp;assert(ok_render,render_error)
@@ -79,4 +125,46 @@ return function(path)
     package.loaded['mp.input'],package.loaded['mp.options']=saved_input,saved_options
     package.loaded['mpv-build/ui_locale']=saved_ui
     assert(ok,err)
+    -- Metadata requests finish normally in playback, but cannot retry on exit.
+    do
+        local original=mp
+        local callbacks,aborted,shutdown={},{},nil
+        local calls,finished=0,0
+        local ok,err=xpcall(function()
+            mp={command_native_async=function(args,fn)calls=calls+1;callbacks[calls]=fn;return calls end,
+                abort_async_command=function(id)aborted[id]=true;callbacks[id](false,{status=-2})end,
+                register_event=function(name,fn)if name=='shutdown'then shutdown=fn end end}
+            dofile(path('extensions/async_requests.lua')).install()
+            mp.command_native_async({name='subprocess'},function()finished=finished+1 end)
+            callbacks[1](true,{status=0})
+            mp.command_native_async({name='subprocess'},function()finished=finished+10 end)
+            mp.command_native_async({name='subprocess'},function()finished=finished+100 end)
+            shutdown()
+            assert(finished==1 and aborted[2] and aborted[3] and not aborted[1],'Abort all pending metadata children without invoking failure/retry callbacks')
+        end,debug.traceback)
+        mp=original;assert(ok,err)
+    end
+    -- Only owned thumbnail subprocesses are cancelled before pipe shutdown.
+    do
+        local original=mp
+        local callbacks,aborted,events={},{},{}
+        local calls,finished=0,0
+        local mock={get_property_native=function()return 'fixture-player-path'end,
+            command_native_async=function(args,fn)calls=calls+1;callbacks[calls]=fn;return calls end,
+            abort_async_command=function(id)aborted[id]=true;callbacks[id](false,{status=-2})end,
+            register_event=function(name,fn)events[name]=fn end}
+        local ok,err=xpcall(function()
+            mp=mock;dofile(path('extensions/thumbfast.lua'))
+            mock.command_native_async({name='subprocess',args={'fixture'}},function()finished=finished+1 end)
+            callbacks[1](true,{status=0})
+            mock.command_native_async({name='subprocess',args={'fixture'}},function()finished=finished+10 end)
+            mock.command_native_async({'overlay-remove',1},function()end)
+            mock.command_native_async({name='subprocess',detach=true,args={'fixture'}},function()end)
+            events.shutdown()
+            assert(aborted[2] and not aborted[1] and not aborted[3] and not aborted[4],'Cancel pending thumbnail child only')
+            assert(finished==1,'Cancelled child cannot trigger a shutdown fallback or spawn a replacement')
+        end,debug.traceback)
+        mp=original;assert(ok,err)
+    end
+
 end

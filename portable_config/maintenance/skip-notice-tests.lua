@@ -21,13 +21,17 @@ return function(path)
  local ok,err=xpcall(function()
   mp=mock;package.loaded['mpv-build/ui_locale']={language=function()return 'ru'end,text=function(v)return v end}
   dofile(path('scripts/skip_prompt.lua'))
-  for _,kind in ipairs({'intro','recap','credits','preview'})do
+  for _,kind in ipairs({'intro','recap','credits'})do
    observers['user-data/skip-prompt'](nil,{kind=kind,start=35,['end']=125,auto=true,notice=true})
-   assert(props['user-data/skip-prompt-visible'] and overlay.data:find('Пропущено:',1,true),'Post-seek notice not visible: '..kind)
+   assert(props['user-data/skip-prompt-visible'] and overlay.data:find('Автопропуск:',1,true),'Post-seek notice not visible: '..kind)
    advance(2.9);observers['user-data/skip-prompt'](nil,{})
    assert(props['user-data/skip-prompt-visible'],'Late empty update shortened notice: '..kind)
    advance(.11);assert(not props['user-data/skip-prompt-visible'],'Notice exceeded 3 seconds: '..kind)
   end
+  observers['user-data/skip-prompt'](nil,{kind='preview',start=35,['end']=125,auto=true,notice=true})
+  assert(not props['user-data/skip-prompt-visible'],'Stale preview notices must stay hidden')
+  observers['user-data/skip-prompt'](nil,{kind='preview',start=125,['end']=145})
+  assert(not props['user-data/skip-prompt-visible'] and not bindings.click,'No preview button or click binding')
   props.seeking=true
   observers['user-data/skip-prompt'](nil,{kind='intro',start=35,['end']=125,auto=true,notice=true})
   observers.seeking();advance(8)

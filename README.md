@@ -52,8 +52,7 @@
     <td><a href="docs/screenshots/04-skip.png"><img src="docs/screenshots/04-skip.png" alt="Пропуск заставки аниме" width="600"></a><br>Пропуск заставки</td>
   </tr>
   <tr>
-    <td><a href="docs/screenshots/05-anime.png"><img src="docs/screenshots/05-anime.png" alt="Воспроизведение аниме" width="600"></a><br>Панель воспроизведения</td>
-    <td><a href="docs/screenshots/06-playlist.png"><img src="docs/screenshots/06-playlist.png" alt="Плейлист сериала" width="600"></a><br>Плейлист</td>
+    <td colspan="2" align="center"><a href="docs/screenshots/05-playlist.png"><img src="docs/screenshots/05-playlist.png" alt="Плейлист с названиями серий" width="600"></a><br>Плейлист</td>
   </tr>
 </table>
 

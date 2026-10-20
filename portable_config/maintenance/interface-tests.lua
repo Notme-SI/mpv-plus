@@ -30,6 +30,16 @@ return function(path)
         assert(translated.title=='Subtitles' and translated.items[1].title=='Изображение','Media title must not be translated')
         assert(translated.items[2].title=='Disable subtitles','Special track menu command')
     end
+    local old={type='menu',items={{title='Пропуск заставок',items={
+        {title='Пропустить заставку',value='script-binding theintrodb/theintrodb-skip-intro'},
+        {title='Пропустить ранее',value={'script-binding','theintrodb/theintrodb-skip-recap'}},
+        {title='Пропустить титры',value={'script-binding','theintrodb/theintrodb-skip-credits'}},
+        {title='Найденные фрагменты',value={'script-binding','theintrodb/theintrodb-toggle-ui'}},
+        {title='Ручной поиск',value={'script-binding','autochapters/search'}}}}}}
+    local clean=ui.menu(old)
+    assert(#clean.items[1].items==2 and #old.items[1].items==5,'Remove only redundant commands, including saved menus')
+    assert(clean.items[1].items[1].value[2]=='theintrodb/theintrodb-toggle-ui','Keep skip settings accessible')
+    assert(#ui.menu(clean).items[1].items==2,'Menu migration is idempotent')
     ui.language=language
     package.loaded['mpv-build/ui_locale']=saved
 end
