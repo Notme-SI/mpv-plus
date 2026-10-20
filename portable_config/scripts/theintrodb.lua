@@ -639,8 +639,6 @@ show_overlay = function()
     if #tidb.segments == 0 then
         items[#items+1] = {title = ui.text('Для этой серии таймкоды не найдены'), selectable = false}
     end
-    items[#items+1]={title=ui.text('Ручной поиск таймкодов (аниме)'),hint=ui.text('Название 1 1 / Name 1 1'),
-        value={'script-binding','autochapters/search'}}
     mp.commandv('script-message-to', 'uosc', 'open-menu', utils.format_json({
         type = 'theintrodb', title = ui.text('Заставки и титры'), items = items,keep_open=true,
         footnote=ui.text('Автопропуск работает только при наличии таймкодов. Выбор сохраняется.'),

@@ -81,6 +81,9 @@ local function identity()
     local data=fmt.parse(raw)
     local corrected=manual.current(raw)
     if corrected then return corrected,raw end
+    local online=mp.get_property_native('user-data/anime-online',{})
+    local online_key=mp.get_property('path','')..'|'..tostring(mp.get_property_number('playlist-pos',-1))
+    if online.media==online_key and type(online.identity)=='table' and online.identity.mal_id then return online.identity,raw end
     local card=lampa.current(raw)
     if card then return card,raw end
     local guess=mp.get_property_native('user-data/guessit',{})
@@ -209,6 +212,7 @@ mp.observe_property('media-title','string',schedule)
 mp.observe_property('user-data/guessit','native',schedule)
 mp.observe_property('user-data/torrserver-context','native',schedule)
 mp.observe_property('user-data/autochapters-manual','native',function() current=nil;schedule() end)
+mp.observe_property('user-data/anime-online','native',function() current=nil;schedule() end)
 
 -- Brand the empty window as well as windows that already have a media title.
 mp.set_property('title','${?idle-active:mpv+}${!idle-active:${media-title} - mpv+}')

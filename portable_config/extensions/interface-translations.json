@@ -1261,5 +1261,13 @@
   {
     "en": "Show statistics",
     "ru": "Показывать статистику"
+  },
+  {
+    "en": "MAL search is unavailable. Try again later.",
+    "ru": "Поиск MAL недоступен. Повторите позже."
+  },
+  {
+    "en": "Ambiguous MAL match: automatic skip timings were not applied",
+    "ru": "Неоднозначное совпадение MAL: автоматические таймкоды не применены"
   }
 ]

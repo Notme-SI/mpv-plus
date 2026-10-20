@@ -112,11 +112,11 @@ function M.menu(data)
             copy.items={}
             local removed={['theintrodb/theintrodb-skip-intro']=true,
                 ['theintrodb/theintrodb-skip-recap']=true,['theintrodb/theintrodb-skip-credits']=true,
-                ['theintrodb/theintrodb-skip-preview']=true}
+                ['theintrodb/theintrodb-skip-preview']=true,['autochapters/search']=true}
             for _,item in ipairs(node.items) do
                 local binding=(type(item.value)=='table' and item.value[1]=='script-binding' and item.value[2])
                     or (type(item.value)=='string' and item.value:match('^script%-binding%s+(.+)$'))
-                if kind~='menu' or not removed[binding] then copy.items[#copy.items+1]=walk(item,false) end
+                if (kind~='menu' and kind~='theintrodb') or not removed[binding] then copy.items[#copy.items+1]=walk(item,false) end
             end
         end
         return copy
@@ -159,9 +159,12 @@ function M.menu(data)
             if type(node)~='table' then return end
             local binding=(type(node.value)=='table' and node.value[1]=='script-binding' and node.value[2])
                 or (type(node.value)=='string' and node.value:match('^script%-binding%s+(.+)$'))
-            if binding=='theintrodb/theintrodb-toggle-ui' or node.title==M.text('Пропуск заставок') then
+            if binding=='theintrodb/theintrodb-toggle-ui' or node.title==M.text('Пропуск заставок')
+                or node.items and has(node,'theintrodb/theintrodb-toggle-ui') then
                 node.title=M.text('Заставки и титры')
                 node.hint=node.hint or 'Ctrl+I'
+                node.value={'script-binding','theintrodb/theintrodb-toggle-ui'}
+                node.items=nil
             end
             for _,child in ipairs(node.items or {}) do rename_skip(child) end
         end

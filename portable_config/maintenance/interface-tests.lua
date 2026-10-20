@@ -37,9 +37,11 @@ return function(path)
         {title='Найденные фрагменты',value={'script-binding','theintrodb/theintrodb-toggle-ui'}},
         {title='Ручной поиск',value={'script-binding','autochapters/search'}}}}}}
     local clean=ui.menu(old)
-    assert(#clean.items[1].items==2 and #old.items[1].items==5,'Remove only redundant commands, including saved menus')
-    assert(clean.items[1].items[1].value[2]=='theintrodb/theintrodb-toggle-ui','Keep skip settings accessible')
-    assert(#ui.menu(clean).items[1].items==2,'Menu migration is idempotent')
+    assert(clean.items[1].items==nil and #old.items[1].items==5,'Flatten the old submenu without rewriting personal settings')
+    assert(clean.items[1].value[2]=='theintrodb/theintrodb-toggle-ui','Open skip settings directly')
+    assert(ui.menu(clean).items[1].items==nil,'Menu migration is idempotent')
+    local skip=ui.menu({type='theintrodb',items={{title='Auto'},{title='Manual',value={'script-binding','autochapters/search'}}}})
+    assert(#skip.items==1,'Remove manual search from cached skip menus too')
     ui.language=language
     package.loaded['mpv-build/ui_locale']=saved
 end

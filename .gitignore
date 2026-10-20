@@ -1,6 +1,7 @@
 # Build output and downloaded dependencies
 /dist/
 /installer/payload/
+/installer/payload-*/
 /installer/output/
 /installer/files.iss
 /installer/payload-manifest.json
@@ -39,6 +40,7 @@ cookies.txt
 **/volume-state.json
 
 **/anime-bindings.json
+**/anime-search-cache.json
 
 **/history.json
 **/network-report.json
