@@ -43,10 +43,14 @@ async function syncDownloads({ github, context, core }) {
   const current = Buffer.from(file.content, 'base64').toString('utf8');
   const updated = replaceDownloadBlock(current, release);
   if (updated === current) return core.info('Download links are already current');
+  const { data: owner } = await github.rest.users.getByUsername({ username: repo.owner });
+  const identity = { name: owner.login, email: `${owner.id}+${owner.login}@users.noreply.github.com` };
   await github.rest.repos.createOrUpdateFileContents({
     ...repo, path: 'README.md', branch: 'main', sha: file.sha,
     message: `docs: update downloads for ${release.tag_name}`,
     content: Buffer.from(updated).toString('base64'),
+    author: identity,
+    committer: identity,
   });
 }
 
