@@ -185,6 +185,7 @@
     "extensions/async_requests.lua": "950eeaac3dd51db7ed6719fb9b8a84deb4b091e00a7e64ae5483c3630edce757",
     "extensions/anime_online.lua": "7fdd7363299861e26e84e7a16071c6f214a2eb68935233f60e46f48acf8386aa",
     "maintenance/anime-online-tests.lua": "968336fe7a0729fa7b955595cd6569cc9b94e694c11670a15478d2aac592e7b9",
-    "maintenance/anime-online-runtime-tests.lua": "ead1af5c1604bff41b239a761953e0b49f0f07e523bdab5cbc071deb932790fd"
+    "maintenance/anime-online-runtime-tests.lua": "ead1af5c1604bff41b239a761953e0b49f0f07e523bdab5cbc071deb932790fd",
+    "maintenance/maintenance-menu-tests.lua": "465e1179b9d9ecbafce9bef65682605db4287232f06116c516d2726e44195012"
   }
 }
