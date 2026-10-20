@@ -120,6 +120,7 @@ local function tests()
     -- Continuous crop: two samples, pause stability, return to full-frame,
     -- invalid/dark samples, current-file opt-out. No user settings are written.
     local cropTimers={}
+    local crop_attempts=0
     local function cleanup()
         for k,t in pairs(cropTimers) do t:kill(); cropTimers[k]=nil end
     end
@@ -132,7 +133,10 @@ local function tests()
     dofile(path('extensions/autocrop.lua'))({
         options=opts,timers=cropTimers,label='autocrop-cropdetect',
         cleanup=cleanup,remove_cropdetect=noop,restore_hwdec=noop,
-        start_detection=function() cropTimers.detect_crop={kill=noop} end,
+        start_detection=function()
+            crop_attempts=crop_attempts+1
+            if crop_attempts>1 then cropTimers.detect_crop={kill=noop} end
+        end,
     })
     local function tick(seconds,paused)
         props.pause=paused
@@ -145,7 +149,10 @@ local function tests()
     events['file-loaded']()
     tick(0.4,false); assert(props['video-crop']=='','crop waits for confirmation')
     tick(2,true); assert(props['video-crop']=='','pause does not consume sample')
-    tick(0.8,false); assert(props['video-crop']=='1920x800+0+140','confirmed crop')
+    tick(1.4,false); assert(crop_attempts>=3 and props['video-crop']=='1920x800+0+140','first-file crop retries when the decoder is initially unready')
+    props.width=nil;props.height=nil;tick(3,false)
+    assert(props['video-crop']=='1920x800+0+140','Temporary missing decoder dimensions keep the last crop')
+    props.width=1920;props.height=1080
     props['vf-metadata/autocrop-cropdetect']['lavfi.cropdetect.w']='-16'
     tick(3,false); assert(props['video-crop']=='1920x800+0+140','invalid sample retains crop')
     props['vf-metadata/autocrop-cropdetect']={['lavfi.cropdetect.w']='1920',['lavfi.cropdetect.h']='1080',['lavfi.cropdetect.x']='0',['lavfi.cropdetect.y']='0'}

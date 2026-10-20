@@ -49,4 +49,35 @@ return function(path)
     end,debug.traceback)
     mp=real;utils.subprocess=subprocess;package.loaded['mp.options']=saved_options;package.loaded['mp.input']=saved_input
     assert(ok,err)
+    do
+        local original=mp
+        local source=dofile(path('extensions/media_source.lua'))
+        local hash=string.rep('b',40)
+        local url='https://active.invalid/proxy/stream/Episode%202.mkv?link='..hash..'&index=2&play&token=fixture'
+        local props={path=url,['playlist-pos']=0,playlist={{filename=url,id=77}}}
+        local calls={}
+        local context={media=url,hash=hash,files={{id=1,path='01. Первая.mkv'},{id=2,path='02. Вторая.mkv'},
+            {id=3,path='03. Третья, серия.MKV'},{id=4,path='02. Вторая.rus.ass'},{id=5,path='cover.jpg'}}}
+        local function get(k,d)if props[k]~=nil then return props[k]end;return d end
+        local ok,err=xpcall(function()
+            mp={get_property=get,get_property_native=get,get_property_number=get,commandv=function(...)
+                local args={...};calls[#calls+1]=args
+                if args[1]=='loadlist'then props.playlist[2]={filename='fixture-added'}end
+            end}
+            source.complete_playlist(context)
+            assert(#calls==2 and calls[1][1]=='loadlist' and calls[1][3]=='append' and calls[2][1]=='playlist-move','Append named episodes and reorder around the active item')
+            local m3u=calls[1][2]
+            assert(m3u:find('Третья, серия.MKV',1,true) and not m3u:find('.ass',1,true) and not m3u:find('cover.jpg',1,true),'Only video episodes enter the playlist')
+            assert(m3u:find('https://active.invalid/proxy/stream?',1,true) and m3u:find('token=fixture',1,true),'Use actual playback origin, prefix and token')
+            assert(not m3u:find('index=2&play',1,true),'Never append the currently playing episode again')
+            source.complete_playlist(context);assert(#calls==2,'An existing playlist is preserved without duplicates')
+            props.playlist={{filename=url,id=77}};context.hash=string.rep('c',40)
+            source.complete_playlist(context);assert(#calls==2,'Never use metadata from another torrent')
+            context.hash=hash;props.path='edl://!new_stream;'..url
+            props.playlist={{filename=props.path,id=77}};context.media=props.path
+            source.complete_playlist(context);assert(#calls==4,'Incoming EDL video can also gain the missing episode playlist')
+        end,debug.traceback)
+        mp=original;assert(ok,err)
+    end
+
 end

@@ -64,11 +64,11 @@ files['doc/VERSION']=(ROOT/'VERSION').read_bytes()
 files['LICENSES/SOURCES.txt']=(ROOT/'SOURCES.txt').read_bytes()
 for name in list(files):
     if (name.endswith(('.cmd','.bat')) or name in {'ПРОЧТИ МЕНЯ.txt','PUBLIC-AUDIT.txt','SOURCES.txt','VERSION.txt'}): files.pop(name)
-    elif PurePosixPath(name).name in {'volume-state.json','window-state.json','audio-preferences.json','subtitle-preferences.json','anime-bindings.json','history.json'} or any(part in {'cache','watch_later'} for part in PurePosixPath(name).parts):
+    elif PurePosixPath(name).name in {'volume-state.json','window-state.json','audio-preferences.json','subtitle-preferences.json','anime-bindings.json','history.json','network-report.json'} or any(part in {'cache','watch_later'} for part in PurePosixPath(name).parts):
         files.pop(name)
 # Public packages must never inherit personal server credentials.
 for name in files:
-    if PurePosixPath(name).name in {'audio-preferences.json', 'subtitle-preferences.json', 'window-state.json', 'volume-state.json', 'anime-bindings.json', 'history.json'}:
+    if PurePosixPath(name).name in {'audio-preferences.json', 'subtitle-preferences.json', 'window-state.json', 'volume-state.json', 'anime-bindings.json', 'history.json','network-report.json'}:
         raise SystemExit('Personal playback preferences in public package')
 ts = files['portable_config/script-opts/torrserver-loader.conf'].decode('utf-8-sig')
 settings = {}

@@ -1,4 +1,4 @@
--- theintrodb.lua - Skip intros, recaps, credits & previews using TheIntroDB
+-- theintrodb.lua - Skip intros, recaps and credits using TheIntroDB
 -- version: v1.0.0
 --
 -- Fetches segment timestamps for the currently playing movie / TV episode from
@@ -72,6 +72,7 @@ end
 local ui=dofile(mp.command_native({'expand-path','~~/extensions/ui_locale.lua'}))
 ui.install_messages()
 local config_root=mp.command_native({'expand-path','~~/'})
+dofile(config_root..'/extensions/async_requests.lua').install()
 local title_format=dofile(config_root..'/extensions/title_format.lua')
 local anime_identity=dofile(config_root..'/extensions/anime_identity.lua')
 local skip_segments=dofile(config_root..'/extensions/skip_segments.lua')
@@ -79,10 +80,10 @@ local settings=dofile(config_root..'/extensions/user_settings.lua')
 local source_context=dofile(config_root..'/extensions/media_source.lua')
 local manual=dofile(config_root..'/extensions/manual_identity.lua')
 local lampa=dofile(config_root..'/extensions/lampa_context.lua')
-local skip_prefs={enabled=true,intro=true,recap=true,credits=true,preview=false}
+local skip_prefs={enabled=true,intro=true,recap=true,credits=true}
 settings.options(skip_prefs,'skip_preferences')
-local ru_kind = {intro="Заставка", recap="Ранее в сериале", credits="Титры", preview="Анонс"}
-local auto_kind = {intro="Заставка", recap="Ранее в сериале", credits="Титры", preview="Анонс"}
+skip_prefs.preview=nil
+local ru_kind = {intro="Заставка", recap="Ранее в сериале", credits="Титры"}
 local tidb = {
     media = nil,          -- parsed API response
     segments = {},        -- flat list: {kind=, start=, end=} in seconds
@@ -399,19 +400,25 @@ end
 
 local function current_segment(pos)
     for _, seg in ipairs(tidb.segments) do
-        if segment_contains(seg, pos) then return seg end
+        if ru_kind[seg.kind] and segment_contains(seg, pos) then return seg end
     end
     return nil
 end
 
+local function skip_action(seg)
+    return skip_segments.action(tidb.segments,seg,tidb.auto_skip,skip_prefs)
+end
 local function prompt_id(seg)
-    return tostring(tidb.file_key or mp.get_property('path',''))..':'..seg.kind..':'..tostring(seg.start)..':'..tostring(seg['end'])
+    return tostring(tidb.file_key or mp.get_property('path',''))..':'..table.concat(seg.kinds or {seg.kind},'+')..':'..tostring(seg.start)..':'..tostring(seg['end'])
 end
 
 local function prompt_segment(pos)
-    for _,seg in ipairs(tidb.segments) do
-        if pos>=math.max(0,(seg.start or 0)-1) and pos<(seg['end'] or math.huge)
-            and tidb.dismissed_prompt~=prompt_id(seg) then return seg end
+    for _,raw in ipairs(tidb.segments) do
+        local seg=skip_action(raw)
+        if ru_kind[seg.kind] and pos>=math.max(0,(seg.start or 0)-1) and pos<(seg['end'] or math.huge) then
+            if tidb.dismissed_prompt==prompt_id(seg) then return end
+            return seg
+        end
     end
 end
 
@@ -432,7 +439,8 @@ end
 
 local skip_transition
 local function do_skip(seg, via_ui, automatic)
-    if seg == nil then return false end
+    if seg == nil or not ru_kind[seg.kind] then return false end
+    if not seg.kinds then seg=skip_action(seg) end
     local target = seg["end"]
     if target == nil or target == math.huge then
         target = duration()
@@ -440,13 +448,25 @@ local function do_skip(seg, via_ui, automatic)
     -- don't skip "to" a position we're already past
     local pos = mp.get_property_number("time-pos") or 0
     if target <= pos then return false end
-    -- land just before EOF if the segment runs to the end
+    -- A terminal credits skip finishes the episode directly. Seeking
+    -- just before EOF can fail on torrent tails and trigger network recovery.
     local max = duration()
+    if max>0 and target>=max-0.25 and seg.kind=='credits' then
+        local list=mp.get_property_native('playlist',{})
+        local pos=mp.get_property_number('playlist-pos',-1)
+        local entry=list[pos+1] or {}
+        mp.set_property_native('user-data/skip-finish',{path=mp.get_property('path',''),id=entry.id})
+        tidb.dismissed_prompt=prompt_id(seg)
+        mp.set_property_native('user-data/skip-prompt',{clear=true})
+        if skip_transition then skip_transition.cancel() end
+        if pos>=0 and list[pos+2] then mp.commandv('playlist-next','force') else mp.commandv('stop') end
+        return true
+    end
     if max > 0 and target >= max - 0.2 then
         target = math.max(0, max - 0.1)
     end
     if automatic then
-        mp.set_property_native('user-data/skip-prompt',{kind=seg.kind,start=seg.start,['end']=seg['end'],auto=true,notice=true})
+        mp.set_property_native('user-data/skip-prompt',{kind=seg.kind,kinds=seg.kinds,start=seg.start,['end']=seg['end'],auto=true,notice=true})
     else
         tidb.dismissed_prompt=prompt_id(seg)
         mp.set_property_native('user-data/skip-prompt',{clear=true})
@@ -455,15 +475,6 @@ local function do_skip(seg, via_ui, automatic)
     if not skip_transition then skip_transition=dofile(config_root..'/extensions/skip_transition.lua').new() end
     skip_transition.seek(target)
     tidb.seek_grace_until = mp.get_time() + 1.5
-    if automatic and o.show_osd == "yes" then
-        local label = ru_kind[seg.kind] or seg.kind
-        if seg["end"] == nil or seg["end"] == math.huge then
-            mp.osd_message(string.format("Пропущено: %s → конец", label), 3)
-        else
-            mp.osd_message(
-                string.format("Пропущено: %s → %s", label, fmt_time(seg["end"])), 3)
-        end
-    end
     return true
 end
 
@@ -518,7 +529,8 @@ local function auto_skip_tick()
     -- Give the separately rendered banner a full second before seeking, also
     -- when timestamps arrive late or the intro starts at the first frame.
     local ready=mp.get_property_native('user-data/skip-prompt-ready',{})
-    for _,seg in ipairs(tidb.segments) do
+    for _,raw in ipairs(tidb.segments) do
+        local seg=skip_action(raw)
         if skip_prefs[seg.kind] and segment_contains(seg,pos) and seg['end'] and seg['end']<math.huge then
             if ready.id==prompt_id(seg) and mp.get_time()-(tonumber(ready.time) or mp.get_time())>=1 then
                 do_skip(seg,false,true)
@@ -550,7 +562,7 @@ local function apply_skip_preferences(save)
         local written,closed
         if file then
             local lines={}
-            for _,key in ipairs({'enabled','intro','recap','credits','preview'}) do
+            for _,key in ipairs({'enabled','intro','recap','credits'}) do
                 lines[#lines+1]=key..'='..(skip_prefs[key] and 'yes' or 'no')
             end
             written=file:write(table.concat(lines,'\n')..'\n');closed=file:close()
@@ -572,7 +584,7 @@ local last_button_state = nil
 local last_prompt_state = nil
 local function send_button(seg)
     local label = seg and (ru_kind[seg.kind] or seg.kind) or nil
-    local prompt=seg and {id=prompt_id(seg),kind=seg.kind,start=seg.start,['end']=seg['end'],auto=tidb.auto_skip and skip_prefs[seg.kind]} or {}
+    local prompt=seg and {id=prompt_id(seg),kind=seg.kind,kinds=seg.kinds,start=seg.start,['end']=seg['end'],auto=tidb.auto_skip and skip_prefs[seg.kind]} or {}
     local prompt_key=(prompt.id or 'none')..':'..tostring(prompt.auto)
     if prompt_key~=last_prompt_state then
         last_prompt_state=prompt_key
@@ -584,7 +596,7 @@ local function send_button(seg)
     mp.commandv('script-message-to', 'uosc', 'set-button', 'theintrodb', utils.format_json({
         icon = 'fast_forward', active = seg ~= nil,
         badge = false,
-        tooltip = seg and ui.text((tidb.auto_skip and skip_prefs[seg.kind] and 'Автопропуск: ' or 'Пропустить: ')..((tidb.auto_skip and skip_prefs[seg.kind] and auto_kind[seg.kind]) or (seg.kind=='intro' and 'Заставку' or label))) or ui.text('Заставки и титры'),
+        tooltip = seg and skip_segments.caption(seg,seg.auto,ui.language()) or ui.text('Заставки и титры'),
         command = seg and 'script-binding theintrodb/theintrodb-skip-next'
             or 'script-binding theintrodb/theintrodb-toggle-ui',
     }))
@@ -604,20 +616,25 @@ show_overlay = function()
     local items = {{title=ui.text('Автоматический пропуск'),hint=ui.text(skip_prefs.enabled and 'ВКЛ' or 'ВЫКЛ'),
         icon=skip_prefs.enabled and 'toggle_on' or 'toggle_off',
         value={'script-message-to','theintrodb','toggle-skip-preference','enabled'}}}
-    for _,kind in ipairs({'recap','intro','credits','preview'}) do
+    for _,kind in ipairs({'recap','intro','credits'}) do
         items[#items+1]={title=ui.text(ru_kind[kind]),
             hint=ui.text(skip_prefs[kind] and 'Автоматически' or 'По кнопке'),
             icon=skip_prefs[kind] and 'check_box' or 'check_box_outline_blank',
             value={'script-message-to','theintrodb','toggle-skip-preference',kind}}
     end
     items[#items].separator=true
-    for i, seg in ipairs(tidb.segments) do
-        local finish = seg['end'] and fmt_time(seg['end']) or ui.text('конец')
-        items[#items + 1] = {
-            title = ui.text((tidb.auto_skip and skip_prefs[seg.kind] and 'Автопропуск: ' or 'Найдено: ') .. ((tidb.auto_skip and skip_prefs[seg.kind] and auto_kind[seg.kind]) or (seg.kind == 'intro' and 'Заставку' or ru_kind[seg.kind] or seg.kind))),
-            hint = fmt_time(seg.start) .. ' → ' .. finish,
-            selectable = false,
-        }
+    local listed={}
+    for _,raw in ipairs(tidb.segments) do
+        if not listed[raw] then
+            local seg=skip_action(raw)
+            for _,member in ipairs(seg.members)do listed[member]=true end
+            local finish = seg['end'] and fmt_time(seg['end']) or ui.text('конец')
+            items[#items + 1] = {
+                title = skip_segments.caption(seg,seg.auto,ui.language()),
+                hint = fmt_time(seg.start) .. ' → ' .. finish,
+                selectable = false,
+            }
+        end
     end
     if #tidb.segments == 0 then
         items[#items+1] = {title = ui.text('Для этой серии таймкоды не найдены'), selectable = false}
@@ -1000,6 +1017,9 @@ end)
 mp.observe_property('user-data/interface-language','string',function()
     last_button_state=nil;update_overlay()
     if mp.get_property_native('user-data/uosc/menu/type')=='theintrodb' then show_overlay() end
+end)
+mp.observe_property('duration','number',function(_,duration)
+    if tidb.file_key and not tidb.duration_ms and duration and duration>0 then on_file_loaded() end
 end)
 mp.register_event("file-loaded", on_file_loaded)
 -- also react to end-file to clean overlay

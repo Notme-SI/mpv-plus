@@ -4,8 +4,10 @@ return function(path)
     local utils=require 'mp.utils'
     local hash=string.rep('a',40)
     local props={path='edl://!new_stream;http://user:pass@other.invalid:8090/prefix/stream/Episode%20Three.mkv?link='..hash..'&index=3&play&token=fixture',pause=false,['time-pos']=30,duration=1400,['demuxer-cache-duration']=.2,['cache-speed']=1048576}
+    props['user-data/player-ui/buffer-visible']=true;props['user-data/player-ui/statistics-visible']=true
     local events,observers,hooks,messages,bindings,timers,requests,commands={},{},{},{},{},{},{},{}
     local overlay={remove=function(self)self.visible=false end,update=function(self)self.visible=true end}
+    local report_data
     local function noop()end
     local function get(k,d)if props[k]==nil then return d end;return props[k]end
     local function set(k,v)props[k]=v end
@@ -25,10 +27,10 @@ return function(path)
         mp=mock;package.loaded['mp.options']={read_options=noop}
         package.loaded['mpv-build/user_settings']={options=noop,path=function(name)return 'memory:'..name end}
         package.loaded['mpv-build/ui_locale']={install_messages=noop,text=function(v)return v end,language=function()return 'ru'end}
-        io.open=function(name,mode)if name:sub(1,7)=='memory:'then return {write=function()return true end,close=function()return true end}end;return open(name,mode)end
+        io.open=function(name,mode)if name:sub(1,7)=='memory:'then return {write=function(_,text)if name=='memory:network-report.json'then report_data=text end;return true end,close=function()return true end}end;return open(name,mode)end
         dofile(path('scripts/network_playback.lua'));emit('start-file',{playlist_entry_id=1})
         assert(overlay.visible and props['user-data/network-buffering'].reason=='opening','Opening always shows the full network panel')
-        assert(overlay.data:find('вперёд',1,true) and overlay.data:find('Кеш TorrServer',1,true),'Full statistics are present before playback starts')
+        assert(overlay.data:find('Буфер: ',1,true) and overlay.data:find('Кеш ',1,true),'Full statistics are present before playback starts')
         hooks.on_load();emit('file-loaded')
         assert(props['file-local-options/demuxer-max-bytes']==128*1048576 and props['file-local-options/demuxer-max-back-bytes']==128*1048576,'Auto distinguishes TorrServer and retains back buffer')
         assert(#requests==1 and requests[1].aborted and not overlay.visible,'Opening poll stops during ordinary playback')
@@ -40,13 +42,17 @@ return function(path)
         local body=utils.parse_json(request.args[#request.args-1]);assert(body.action=='get'and body.hash==hash)
         observers['paused-for-cache']();assert(#requests==2,'Single-flight statistics')
         request.fn(true,{status=0,stdout=utils.format_json({Capacity=100*1048576,Filled=50*1048576,Torrent={download_speed=2*1048576,active_peers=7,connected_seeders=3}})})
-        assert(overlay.data:find('2.0 МБ/с',1,true) and overlay.data:find('50.0 / 100.0 МБ',1,true),'Show actual server stats separately from player read speed')
+        assert(overlay.data:find('16.8 Мбит/с',1,true) and overlay.data:find('50/100 МБ',1,true),'Show actual server stats separately from player read speed')
+        bindings.report()
+        local report=assert(utils.parse_json(report_data))
+        assert(report.source=='TorrServer' and report.current.player_seconds==.2 and report.current.server_bytes==50*1048576 and #report.samples>0,'Loading report captures both cache layers and recent state')
+        assert(not report_data:find('user:pass',1,true) and not report_data:find('other.invalid',1,true) and not report_data:find(hash,1,true),'Report must not contain stream URLs, passwords or torrent identifiers')
         props['user-data/player-ui/buffer-visible']=false;observers['user-data/player-ui/buffer-visible']()
-        assert(overlay.visible and not overlay.data:find('вперёд',1,true) and overlay.data:find('TorrServer',1,true),'Hide buffer independently')
+        assert(overlay.visible and not overlay.data:find(' из ',1,true) and overlay.data:find('Статистика',1,true),'Hide buffer independently')
         props['user-data/player-ui/statistics-visible']=false;observers['user-data/player-ui/statistics-visible']()
         assert(not overlay.visible,'Both switches off remove the overlay immediately')
         props['user-data/player-ui/buffer-visible']=true;observers['user-data/player-ui/buffer-visible']()
-        assert(overlay.visible and overlay.data:find('вперёд',1,true) and not overlay.data:find('TorrServer',1,true),'Buffer-only overlay')
+        assert(overlay.visible and overlay.data:find('Буфер: ',1,true) and not overlay.data:find('Статистика',1,true),'Buffer-only overlay')
         props['user-data/player-ui/statistics-visible']=true;observers['user-data/player-ui/statistics-visible']()
         props['paused-for-cache']=false;observers['paused-for-cache']();assert(not overlay.visible)
         for i=1,4 do
@@ -74,7 +80,7 @@ return function(path)
         props['user-data/torrserver-loading']={media=props.path,time=0,state='caching',file='episode.mkv',speed='97.46 Mbps',cache='0.10 / 0.10 GB',peers='16 / 41 · 14',extra=''}
         observers['user-data/torrserver-loading']()
         assert(overlay.visible and overlay.data:find('97.46 Mbps',1,true) and overlay.data:find('0.10 / 0.10 ГБ',1,true)
-            and overlay.data:find('16 / 41 · 14',1,true) and overlay.data:find('TorrServer',1,true),'Retain the complete original loader data even before a standard stream endpoint is known')
+            and overlay.data:find('16 / 41 · 14',1,true) and overlay.data:find('Статистика',1,true),'Retain the complete original loader data even before a standard stream endpoint is known')
         assert(#requests==count,'Opaque URLs must not query an unrelated configured server')
         props['user-data/torrserver-loading']={};observers['user-data/torrserver-loading']();assert(not overlay.visible)
         emit('end-file',{playlist_entry_id=2,reason='stop'})
@@ -88,7 +94,12 @@ return function(path)
     dofile(path('extensions/network_seek.lua'))(Timeline)
     local item=setmetatable({pressed={}}, {__index=Timeline})
     for i=1,100 do now=i*.001;item:set_from_cursor(false)end
-    assert(#calls==1 and calls[1]==true,'A burst of network dragging must coalesce into a keyframe seek')
-    item:handle_cursor_up();assert(#calls==2 and calls[2]==false and not item.pressed,'Release performs exactly one final precise seek')
+    assert(#calls==0,'Dragging a network timeline must not issue intermediate HTTP seeks')
+    item:handle_cursor_up();assert(#calls==1 and calls[1]==false and not item.pressed,'Release performs exactly one precise seek')
+    item:handle_cursor_up();assert(#calls==1,'Duplicate release events cannot repeat a seek')
+    item.pressed={};item:on_global_mouse_leave();assert(#calls==2 and calls[2]==false and not item.pressed,'Leaving the window commits the current drag once')
+    mp.get_property_bool=function()return false end;mp.get_property=function()return 'C:/fixture.mkv'end
+    item.pressed={};item:set_from_cursor(true);assert(#calls==3 and calls[3]==true,'Local scrubbing retains immediate preview seeks')
+    item:handle_cursor_up();assert(#calls==3,'Local release retains native behavior')
     mp=real
 end

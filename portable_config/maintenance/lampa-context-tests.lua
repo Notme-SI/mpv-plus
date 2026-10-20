@@ -62,6 +62,32 @@ return function(path)
         assert(calls>count,'Title changes must invalidate the current result')
         props.path=media:gsub('S03E02','S04E02')
         assert(reader.current()==nil,'Never reuse another file identity')
+        local anchor='http://localhost/stream?link='..string.rep('a',40)..'&index=1&play'
+        local second=anchor:gsub('index=1','index=2')
+        local files={{id=1,path='MobLand/MobLand_S01E01_RHS_4K_[scarfilm].mkv'},
+            {id=2,path='MobLand/MobLand_S01E02_RHS_4K_[scarfilm].mkv'}}
+        props.path=second
+        context={media=second,path=files[2].path,title='Гангстерленд_1_сезон_4K_RHS_[scarfilm]',files=files}
+        os.getenv=function(key)
+            if key=='MPV_PLUS_LAMPA_CONTEXT' then return utils.format_json({version=1,source='lampa',entries={{url=anchor,identity={
+                title='Гангстерленд',original_title='MobLand',kind='tv',tmdb_id=247718,season=1,episode=1,episode_title='Пан или пропал',
+            }}}}) end
+            return getenv(key)
+        end
+        reader=dofile(path('extensions/lampa_context.lua'))
+        local sibling=reader.current('MobLand_S01E02_RHS_4K_[scarfilm].mkv')
+        assert(sibling and sibling.tmdb_id==247718 and sibling.title=='Гангстерленд' and sibling.season==1 and sibling.episode==2 and not sibling.episode_title,'Verified sibling keeps its own episode and canonical card identity')
+        local first=reader.current('MobLand_S01E01_RHS_4K_[scarfilm].mkv',anchor)
+        assert(first and first.episode==1 and first.episode_title=='Пан или пропал','Playlist entries resolve independently of the playing entry')
+        for _,bad in ipairs({'OtherShow_S01E02.mkv','MobLand_S02E02.mkv','02.mkv'}) do
+            files[2].path=bad;context.path=bad
+            assert(not reader.current(bad),'Reject unproven sibling: '..bad)
+        end
+        files[2].path='MobLand_S01E02.mkv';context.path=files[2].path
+        for _,bad in ipairs({(second:gsub(string.rep('a',40),string.rep('b',40))),(second:gsub('localhost','other.example')),(second:gsub('index=2','index=99'))}) do
+            props.path=bad;context.media=bad
+            assert(not reader.current(files[2].path),'Never inherit by episode number alone')
+        end
     end,debug.traceback)
     if wrapped then wrapped.from_source=original_identify end
     mp,os.getenv=real,getenv

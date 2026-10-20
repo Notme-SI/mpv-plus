@@ -4,7 +4,7 @@ ui.install_messages()
 local utils = require 'mp.utils'
 local config_path = dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua').path('script-opts/uosc.conf')
 local style, cache = 'bar', true
-local prefs={icon_style='glass',chapter_marks=true,controls_always=false,buffer_visible=true,statistics_visible=true}
+local prefs={icon_style='glass',chapter_marks=true,controls_always=false,buffer_visible=false,statistics_visible=false}
 dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua').options(prefs,'player_ui')
 if prefs.icon_style~='plain' then prefs.icon_style='glass' end
 local prefs_path=dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua').path('script-opts/player_ui.conf')

@@ -42,5 +42,57 @@
   {
     "before": "\nmp.add_key_binding(nil, \"search\", search)\nmp.add_key_binding(nil, \"update\", update_db)\n\nif options.hook then\n    mp.add_hook(\"on_preloaded\", 50, file_load)\n",
     "after": "\nmp.add_key_binding(nil, \"search\", search)\nmp.add_key_binding(nil, \"update\", update_db)\nmp.observe_property('user-data/torrserver-context','native',function()\n    if not mp.get_property_bool('idle-active',true) then mp.add_timeout(0,file_load) end\nend)\n\nif options.hook then\n    mp.add_hook(\"on_preloaded\", 50, file_load)\n"
+  },
+  {
+    "before": "local input = require \"mp.input\"\nlocal encoding = require \"encoding\"\nlocal root=mp.command_native({'expand-path','~~/'})\nlocal title_format=dofile(root..'/extensions/title_format.lua')\nlocal anime_identity=dofile(root..'/extensions/anime_identity.lua')\nlocal source_context=dofile(root..'/extensions/media_source.lua')\n",
+    "after": "local input = require \"mp.input\"\nlocal encoding = require \"encoding\"\nlocal root=mp.command_native({'expand-path','~~/'})\ndofile(root..'/extensions/async_requests.lua').install()\nlocal title_format=dofile(root..'/extensions/title_format.lua')\nlocal anime_identity=dofile(root..'/extensions/anime_identity.lua')\nlocal source_context=dofile(root..'/extensions/media_source.lua')\n"
+  },
+  {
+    "before": "local input = require \"mp.input\"\nlocal encoding = require \"encoding\"\nlocal root=mp.command_native({'expand-path','~~/'})\ndofile(root..'/extensions/async_requests.lua').install()\nlocal title_format=dofile(root..'/extensions/title_format.lua')\nlocal anime_identity=dofile(root..'/extensions/anime_identity.lua')\nlocal source_context=dofile(root..'/extensions/media_source.lua')\n",
+    "after": "local input = require \"mp.input\"\nlocal encoding = require \"encoding\"\nlocal root=mp.command_native({'expand-path','~~/'})\nlocal async=dofile(root..'/extensions/async_requests.lua').install()\nlocal title_format=dofile(root..'/extensions/title_format.lua')\nlocal anime_identity=dofile(root..'/extensions/anime_identity.lua')\nlocal source_context=dofile(root..'/extensions/media_source.lua')\n"
+  },
+  {
+    "before": "    mp.set_property_native('user-data/file-chapters',{key=media_key(),chapters=mp.get_property_native('chapter-list',{})})\nend)\nlocal lookup_key\nlocal function current_lookup() return lookup_key == media_key() end\n\nlocal types = {\n    op = \"Заставка (OP)\",\n",
+    "after": "    mp.set_property_native('user-data/file-chapters',{key=media_key(),chapters=mp.get_property_native('chapter-list',{})})\nend)\nlocal lookup_key\nlocal lookup_serial=0\nlocal function current_lookup(serial) return lookup_key == media_key() and (not serial or serial==lookup_serial) end\n\nlocal types = {\n    op = \"Заставка (OP)\",\n"
+  },
+  {
+    "before": "        return contextual.title,contextual.episode,contextual.season,contextual.year\n    end\n\n    local guessit = mp.command_native({name = \"subprocess\", playback_only = false, capture_stdout = true, args = {\"powershell.exe\", \"-NoProfile\", \"-ExecutionPolicy\", \"Bypass\", \"-File\", utils.join_path(script_dir, \"guessit-json.ps1\"), \"-Name\", path}})\n    if not guessit or not guessit.stdout then\n        return nil, nil\n    end\n",
+    "after": "        return contextual.title,contextual.episode,contextual.season,contextual.year\n    end\n\n    local guessit = async.call({name = \"subprocess\", playback_only = false, capture_stdout = true, args = {\"powershell.exe\", \"-NoProfile\", \"-ExecutionPolicy\", \"Bypass\", \"-File\", utils.join_path(script_dir, \"guessit-json.ps1\"), \"-Name\", path}})\n    if not guessit or not guessit.stdout then\n        return nil, nil\n    end\n"
+  },
+  {
+    "before": "    end\nend\n\nlocal function api_lookup(title, episode, duration, auto, season, year)\n    local card=auto and (manual.current(placeholder_title) or lampa.current())\n    if auto and not card then\n        local contextual=anime_identity.from_source(placeholder_title,source_context.current())\n",
+    "after": "    end\nend\n\nlocal function api_lookup(title, episode, duration, auto, season, year, serial)\n    local card=auto and (manual.current(placeholder_title) or lampa.current())\n    if auto and not card then\n        local contextual=anime_identity.from_source(placeholder_title,source_context.current())\n"
+  },
+  {
+    "before": "    local function lookup(length)\n        local url = api_url .. '/skip-times/' .. mal_id .. '/' .. (episode or 1)\n            .. '?types=op&types=ed&types=recap&episodeLength=' .. math.max(0,length)\n        local response = mp.command_native({name='subprocess', playback_only=false,\n            capture_stdout=true, capture_stderr=true, args={'curl','-fsS','--globoff',\n                '--connect-timeout','5','--max-time','10',url}})\n        local data = response and response.status==0 and utils.parse_json(response.stdout or '')\n",
+    "after": "    local function lookup(length)\n        local url = api_url .. '/skip-times/' .. mal_id .. '/' .. (episode or 1)\n            .. '?types=op&types=ed&types=recap&episodeLength=' .. math.max(0,length)\n        local response = async.call({name='subprocess', playback_only=false,\n            capture_stdout=true, capture_stderr=true, args={'curl','-fsS','--globoff',\n                '--connect-timeout','5','--max-time','10',url}})\n        local data = response and response.status==0 and utils.parse_json(response.stdout or '')\n"
+  },
+  {
+    "before": "    end\n    local skip_rules=dofile(root..'/extensions/skip_segments.lua')\n    local best=skip_rules.aniskip(lookup(duration),duration)\n    if not next(best) and options.allow_loose_matches then\n        best=skip_rules.aniskip(lookup(0),duration)\n    end\n",
+    "after": "    end\n    local skip_rules=dofile(root..'/extensions/skip_segments.lua')\n    local best=skip_rules.aniskip(lookup(duration),duration)\n    if not current_lookup(serial)then return end\n    if not next(best) and options.allow_loose_matches then\n        best=skip_rules.aniskip(lookup(0),duration)\n    end\n"
+  },
+  {
+    "before": "        if best[kind] then data.results[#data.results+1]=best[kind].segment end\n    end\n\n    if not current_lookup() then return end\n\n    local original=mp.get_property_native('user-data/file-chapters',{})\n    local embedded=original.key==media_key() and original.chapters or {}\n",
+    "after": "        if best[kind] then data.results[#data.results+1]=best[kind].segment end\n    end\n\n    if not current_lookup(serial) then return end\n\n    local original=mp.get_property_native('user-data/file-chapters',{})\n    local embedded=original.key==media_key() and original.chapters or {}\n"
+  },
+  {
+    "before": "end\n\nlocal function find_chapters(media_title, auto)\n    lookup_key = media_key()\n    local title, episode, season, year = guess(media_title, auto)\n    if not title then return end\n\n    local duration = mp.get_property_number(\"duration\", 0)\n\n    local found = api_lookup(title, episode, duration, auto, season, year)\n\n    if not found and current_lookup() then\n        mp.set_property_native(\"user-data/autochapters\", {})\n    end\n    return found, title, episode, season, year\n",
+    "after": "end\n\nlocal function find_chapters(media_title, auto)\n    lookup_serial=lookup_serial+1\n    local serial=lookup_serial\n    lookup_key = media_key()\n    local title, episode, season, year = guess(media_title, auto)\n    if not title or not current_lookup(serial) then return end\n\n    local duration = mp.get_property_number(\"duration\", 0)\n\n    local found = api_lookup(title, episode, duration, auto, season, year,serial)\n\n    if not found and current_lookup(serial) then\n        mp.set_property_native(\"user-data/autochapters\", {})\n    end\n    return found, title, episode, season, year\n"
+  },
+  {
+    "before": "    return name:gsub('%%(%x%x)', function(h) return string.char(tonumber(h, 16)) end)\nend\n\nfile_load = function()\n    mp.set_property_native('user-data/autochapters', {})\n    mp.set_property('user-data/autochapters-media', '')\n    mp.set_property_native('user-data/guessit', {})\n",
+    "after": "    return name:gsub('%%(%x%x)', function(h) return string.char(tonumber(h, 16)) end)\nend\n\nfile_load = async.wrap(function()\n    mp.set_property_native('user-data/autochapters', {})\n    mp.set_property('user-data/autochapters-media', '')\n    mp.set_property_native('user-data/guessit', {})\n"
+  },
+  {
+    "before": "    local card=lampa.current(placeholder_title)\n    if (placeholder_title == '' or placeholder_title == 'stream') and not card then return end\n    find_chapters(placeholder_title, true)\nend\nmp.register_event('end-file', function()\n    mp.set_property_native('user-data/file-chapters', {})\n    mp.set_property_native('user-data/autochapters', {})\n    mp.set_property('user-data/autochapters-media', '')\n",
+    "after": "    local card=lampa.current(placeholder_title)\n    if (placeholder_title == '' or placeholder_title == 'stream') and not card then return end\n    find_chapters(placeholder_title, true)\nend)\nmp.register_event('end-file', function()\n    lookup_serial=lookup_serial+1\n    mp.set_property_native('user-data/file-chapters', {})\n    mp.set_property_native('user-data/autochapters', {})\n    mp.set_property('user-data/autochapters-media', '')\n"
+  },
+  {
+    "before": "        submit = function (media_title)\n            placeholder_title = media_title\n            if media_title ~= \"\" then\n                mp.add_timeout(0.05, function()\n                    local candidates={}\n                    for value in media_title:gmatch('[^/|]+') do\n                        value=value:gsub('^%s+',''):gsub('%s+$','')\n",
+    "after": "        submit = function (media_title)\n            placeholder_title = media_title\n            if media_title ~= \"\" then\n                mp.add_timeout(0.05, async.wrap(function()\n                    local candidates={}\n                    for value in media_title:gmatch('[^/|]+') do\n                        value=value:gsub('^%s+',''):gsub('%s+$','')\n"
+  },
+  {
+    "before": "                    if not found then\n                        msg.info(\"Таймкоды не найдены: \" .. (title and (title .. (episode and (\" - серия \" .. episode) or \"\")) or media_title))\n                    end\n                end)\n            else\n                mp.set_property_native(\"chapter-list\", {})\n            end\n",
+    "after": "                    if not found then\n                        msg.info(\"Таймкоды не найдены: \" .. (title and (title .. (episode and (\" - серия \" .. episode) or \"\")) or media_title))\n                    end\n                end))\n            else\n                mp.set_property_native(\"chapter-list\", {})\n            end\n"
   }
 ]

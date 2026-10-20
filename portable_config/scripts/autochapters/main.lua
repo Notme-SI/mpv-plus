@@ -13,6 +13,7 @@ ui.install_messages()
 local input = require "mp.input"
 local encoding = require "encoding"
 local root=mp.command_native({'expand-path','~~/'})
+local async=dofile(root..'/extensions/async_requests.lua').install()
 local title_format=dofile(root..'/extensions/title_format.lua')
 local anime_identity=dofile(root..'/extensions/anime_identity.lua')
 local source_context=dofile(root..'/extensions/media_source.lua')
@@ -42,7 +43,8 @@ mp.add_hook('on_preloaded',20,function()
     mp.set_property_native('user-data/file-chapters',{key=media_key(),chapters=mp.get_property_native('chapter-list',{})})
 end)
 local lookup_key
-local function current_lookup() return lookup_key == media_key() end
+local lookup_serial=0
+local function current_lookup(serial) return lookup_key == media_key() and (not serial or serial==lookup_serial) end
 
 local types = {
     op = "Заставка (OP)",
@@ -79,7 +81,7 @@ local function guess(path, auto)
         return contextual.title,contextual.episode,contextual.season,contextual.year
     end
 
-    local guessit = mp.command_native({name = "subprocess", playback_only = false, capture_stdout = true, args = {"powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", utils.join_path(script_dir, "guessit-json.ps1"), "-Name", path}})
+    local guessit = async.call({name = "subprocess", playback_only = false, capture_stdout = true, args = {"powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", utils.join_path(script_dir, "guessit-json.ps1"), "-Name", path}})
     if not guessit or not guessit.stdout then
         return nil, nil
     end
@@ -166,7 +168,7 @@ local function read_json(path)
     end
 end
 
-local function api_lookup(title, episode, duration, auto, season, year)
+local function api_lookup(title, episode, duration, auto, season, year, serial)
     local card=auto and (manual.current(placeholder_title) or lampa.current())
     if auto and not card then
         local contextual=anime_identity.from_source(placeholder_title,source_context.current())
@@ -214,7 +216,7 @@ local function api_lookup(title, episode, duration, auto, season, year)
     local function lookup(length)
         local url = api_url .. '/skip-times/' .. mal_id .. '/' .. (episode or 1)
             .. '?types=op&types=ed&types=recap&episodeLength=' .. math.max(0,length)
-        local response = mp.command_native({name='subprocess', playback_only=false,
+        local response = async.call({name='subprocess', playback_only=false,
             capture_stdout=true, capture_stderr=true, args={'curl','-fsS','--globoff',
                 '--connect-timeout','5','--max-time','10',url}})
         local data = response and response.status==0 and utils.parse_json(response.stdout or '')
@@ -222,6 +224,7 @@ local function api_lookup(title, episode, duration, auto, season, year)
     end
     local skip_rules=dofile(root..'/extensions/skip_segments.lua')
     local best=skip_rules.aniskip(lookup(duration),duration)
+    if not current_lookup(serial)then return end
     if not next(best) and options.allow_loose_matches then
         best=skip_rules.aniskip(lookup(0),duration)
     end
@@ -231,7 +234,7 @@ local function api_lookup(title, episode, duration, auto, season, year)
         if best[kind] then data.results[#data.results+1]=best[kind].segment end
     end
 
-    if not current_lookup() then return end
+    if not current_lookup(serial) then return end
 
     local original=mp.get_property_native('user-data/file-chapters',{})
     local embedded=original.key==media_key() and original.chapters or {}
@@ -262,15 +265,17 @@ local function api_lookup(title, episode, duration, auto, season, year)
 end
 
 local function find_chapters(media_title, auto)
+    lookup_serial=lookup_serial+1
+    local serial=lookup_serial
     lookup_key = media_key()
     local title, episode, season, year = guess(media_title, auto)
-    if not title then return end
+    if not title or not current_lookup(serial) then return end
 
     local duration = mp.get_property_number("duration", 0)
 
-    local found = api_lookup(title, episode, duration, auto, season, year)
+    local found = api_lookup(title, episode, duration, auto, season, year,serial)
 
-    if not found and current_lookup() then
+    if not found and current_lookup(serial) then
         mp.set_property_native("user-data/autochapters", {})
     end
     return found, title, episode, season, year
@@ -286,7 +291,7 @@ local function episode_name()
     return name:gsub('%%(%x%x)', function(h) return string.char(tonumber(h, 16)) end)
 end
 
-file_load = function()
+file_load = async.wrap(function()
     mp.set_property_native('user-data/autochapters', {})
     mp.set_property('user-data/autochapters-media', '')
     mp.set_property_native('user-data/guessit', {})
@@ -295,8 +300,9 @@ file_load = function()
     local card=lampa.current(placeholder_title)
     if (placeholder_title == '' or placeholder_title == 'stream') and not card then return end
     find_chapters(placeholder_title, true)
-end
+end)
 mp.register_event('end-file', function()
+    lookup_serial=lookup_serial+1
     mp.set_property_native('user-data/file-chapters', {})
     mp.set_property_native('user-data/autochapters', {})
     mp.set_property('user-data/autochapters-media', '')
@@ -313,7 +319,7 @@ local function search()
         submit = function (media_title)
             placeholder_title = media_title
             if media_title ~= "" then
-                mp.add_timeout(0.05, function()
+                mp.add_timeout(0.05, async.wrap(function()
                     local candidates={}
                     for value in media_title:gmatch('[^/|]+') do
                         value=value:gsub('^%s+',''):gsub('%s+$','')
@@ -344,7 +350,7 @@ local function search()
                     if not found then
                         msg.info("Таймкоды не найдены: " .. (title and (title .. (episode and (" - серия " .. episode) or "")) or media_title))
                     end
-                end)
+                end))
             else
                 mp.set_property_native("chapter-list", {})
             end

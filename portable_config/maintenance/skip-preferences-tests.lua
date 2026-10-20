@@ -5,12 +5,12 @@ return function(path)
     local saved={}
     for _,k in ipairs({'mp.options','mpv-build/user_settings','mpv-build/ui_locale'}) do saved[k]=package.loaded[k] end
     local props={volume=100,['volume-max']=130,pause=false,['time-pos']=40,duration=1440}
-    local observers,events,messages,timers,commands,osd={},{},{},{},{},{}
+    local observers,events,messages,timers,commands,osd,notices={},{},{},{},{},{},{}
     local now=10
     local files={['volume-state.json']='{"volume":37}'}
     local function noop() end
     local function get(k,d) if props[k]==nil then return d end;return props[k] end
-    local function set(k,v) if k=='pause' and v=='no' then v=false end;props[k]=v end
+    local function set(k,v) if k=='user-data/skip-prompt' and v.notice then notices[#notices+1]=v end;if k=='pause' and v=='no' then v=false end;props[k]=v end
     local function timer(_,fn)
         local t={fn=fn,active=true,kill=function(self) self.active=false end};timers[#timers+1]=t;return t
     end
@@ -56,7 +56,7 @@ return function(path)
         props.volume=100;dofile(path('scripts/volume_memory.lua'));assert(props.volume==23,'Restore on next launch')
         dofile(path('scripts/theintrodb.lua'))
         local state=__tidb_debug()
-        for _,kind in ipairs({'intro','recap','credits','preview'}) do
+        for _,kind in ipairs({'intro','recap','credits'}) do
             props['time-pos']=40
             state.segments={{kind=kind,start=35,['end']=125}};state.seek_grace_until=0
             commands={}
@@ -75,7 +75,7 @@ return function(path)
             local sought=false
             for _,c in ipairs(commands) do if c[1]=='seek' then sought=true;assert(c[2]=='125') end end
             assert(sought==(kind~='preview'),'Default skip selection: '..kind)
-            if sought then assert(osd[#osd].seconds==3,'Skip result must stay visible for 3 seconds')end
+            if sought then assert(notices[#notices].kind==kind and notices[#notices].notice,'Automatic skip publishes one panel notification')end
             now=now+.025;for _,t in ipairs(timers)do if t.active then t.fn()end end
             now=now+.2;for _,t in ipairs(timers)do if t.active then t.fn()end end
         end

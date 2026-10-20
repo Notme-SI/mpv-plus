@@ -1,5 +1,6 @@
 -- Presentation of the loader's own statistics; no requests or playback changes.
 local M={}
+local surface=dofile(mp.command_native({'expand-path','~~/'})..'/extensions/overlay_style.lua')
 function M.parse(message)
     if type(message)~='string' then return end
     message=message:gsub('\r\n','\n')
@@ -33,12 +34,10 @@ function M.render(data,language,w,h,playback)
     local x,y=w-width-10*scale,10*scale
     local height=(data.extra~='' and 218 or 190)*scale
     if playback then height=height+54*scale end
-    ass:new_event()
-    ass:append('{\\an7\\pos(0,0)\\bord0\\shad0\\1c&H202020&\\1a&H48&}')
-    ass:draw_start();ass:round_rect_cw(x,y,x+width,y+height,12*scale);ass:draw_stop()
+    surface.panel(ass,{x0=x,y0=y,x1=x+width,y1=y+height},scale,playback and playback.icon_style or 'glass',false,8*scale)
     local function text(value,px,py,size,color,bold,align)
         ass:new_event()
-        ass:append(string.format('{\\an%d\\pos(%.1f,%.1f)\\fnSegoe UI\\fs%.1f\\1c&H%s&\\bord0\\shad0\\b%d}%s',
+        ass:append(string.format('{\\rDefault\\an%d\\pos(%.1f,%.1f)\\fnSegoe UI\\fs%.1f\\1c&H%s&\\alpha&H00&\\1a&H00&\\bord0\\shad0\\b%d}%s',
             align or 7,px,py,size*scale,color,bold and 1 or 0,escape(value)))
     end
     text(en and 'TORRSERVER AND PLAYER' or 'TORRSERVER И ПЛЕЕР',x+12*scale,y+10*scale,20,'C8C8C8',true)
@@ -101,12 +100,14 @@ function M.new(ui)
         if mp.get_property_native('user-data/network-buffering',{}).managed then overlay:remove();return end
         overlay.res_x=w;overlay.res_y=h
         overlay.data=M.render(value,ui.language(),w,h,{
+            icon_style=mp.get_property_native('user-data/player-ui/icon-style','glass'),
             seconds=mp.get_property_number('demuxer-cache-duration'),
             speed=mp.get_property_number('cache-speed'),
         });overlay:update()
     end
     mp.observe_property('osd-dimensions','native',draw)
     mp.observe_property('user-data/interface-language','native',draw)
+    mp.observe_property('user-data/player-ui/icon-style','native',draw)
     mp.observe_property('user-data/network-buffering','native',draw)
     mp.register_event('end-file',hide)
     mp.register_event('shutdown',hide)

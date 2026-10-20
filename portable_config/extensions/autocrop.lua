@@ -112,6 +112,11 @@ local function detect_end()
     if meta.w and meta.h and meta.x and meta.y then
         local width = mp.get_property_native("width")
         local height = mp.get_property_native("height")
+        -- Restoring hardware decoding can temporarily remove video dimensions.
+        -- Wait for the next valid sample instead of terminating the controller.
+        if not width or not height or width<=0 or height<=0 then
+            candidate_crop=nil;manual_scan=false;schedule_next_scan(0.5);return
+        end
 
         meta = {
             w = tonumber(meta.w),
@@ -149,6 +154,10 @@ detect_crop = function()
     if timers.detect_crop then
         timers.detect_crop:kill()
         timers.detect_crop = playback_timeout(options.detect_seconds, detect_end)
+    elseif enabled and options.auto then
+        -- On the first stream, file-loaded can precede a usable video track,
+        -- duration or filter chain. A rejected initial probe must not stop auto.
+        schedule_next_scan(0.5)
     end
 end
 

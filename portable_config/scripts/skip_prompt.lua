@@ -8,8 +8,8 @@ overlay.z=1001
 local cue,notice,box,hover,bound=nil,nil,nil,false,false
 local notice_timer
 local notice_seconds=3
-local labels={intro='Заставку',recap='Ранее в сериале',credits='Титры',preview='Анонс'}
-local auto_labels={intro='Заставка',recap='Ранее в сериале',credits='Титры',preview='Анонс'}
+local labels={intro='Заставку',recap='Ранее в сериале',credits='Титры'}
+local segments=dofile(mp.command_native({'expand-path','~~/extensions/skip_segments.lua'}))
 local draw
 local function clicked()
     local t=mp.get_property_number('time-pos',-1)
@@ -33,19 +33,10 @@ draw=function()
         return
     end
     local scale=math.max(0.65,math.min(2,h/720))
-    local widths=ui.language()=='en' and {intro=165,recap=180,credits=195,preview=195} or {intro=280,recap=360,credits=245,preview=245}
+    local widths=ui.language()=='en' and {intro=165,recap=180,credits=195} or {intro=280,recap=360,credits=245}
     local ass=assdraw.ass_new()
     local function render(data,y,clickable)
-        local text
-        if data.notice then
-            local names={}
-            local en=ui.language()=='en'
-            local english={intro='Intro',recap='Recap',credits='Credits',preview='Preview'}
-            for _,kind in ipairs(data.kinds or {data.kind})do names[#names+1]=en and english[kind] or auto_labels[kind] end
-            text=(en and 'Skipped: ' or 'Пропущено: ')..table.concat(names,' · ')
-        else
-            text=ui.text((data.auto and 'Автопропуск: ' or 'Пропустить: ')..(data.auto and auto_labels[data.kind] or labels[data.kind]))
-        end
+        local text=segments.caption(data,data.auto or data.notice,ui.language())
         local _,glyphs=text:gsub('[^\128-\191]','')
         local bw=math.min(math.max(widths[data.kind],glyphs*13+32)*scale,w-20*scale)
         local x1=w-25*scale
@@ -59,8 +50,7 @@ draw=function()
             (area.x0+area.x1)/2,(area.y0+area.y1)/2,25*scale,text))
     end
     box=nil;hover=false
-    -- Only one panel: an upcoming action takes priority; consecutive results
-    -- are combined into its final three-second confirmation.
+    -- Only one panel. Joined segments arrive as one action and one notice.
     if active then render(cue,h-105*scale,true)
     elseif notice then render(notice,h-105*scale,false) end
     if hover and not bound then
@@ -94,10 +84,7 @@ mp.observe_property('user-data/skip-prompt','native',function(_,data)
         if notice_timer then notice_timer:kill();notice_timer=nil end
     elseif type(data)=='table' and data.kind and labels[data.kind] then
         if data.notice then
-            local kinds=notice and notice.kinds or {}
-            local found=false;for _,kind in ipairs(kinds)do if kind==data.kind then found=true end end
-            if not found then kinds[#kinds+1]=data.kind end
-            notice={kind=data.kind,start=data.start,['end']=data['end'],auto=true,notice=true,kinds=kinds}
+            notice={kind=data.kind,start=data.start,['end']=data['end'],auto=true,notice=true,kinds=data.kinds or {data.kind}}
             cue=nil;start_notice_timer()
         elseif not (notice and notice.kind==data.kind and notice.start==data.start)then cue=data end
     else cue=nil end
