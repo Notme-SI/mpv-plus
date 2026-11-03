@@ -17,6 +17,7 @@ end
 local function show()
     local items={
         {title=text('Версия плеера','Player version'),hint='mpv+ '..version(),value={'script-message-to','player_maintenance','github'}},
+        {title=text('Обновить mpv+','Update mpv+'),value={'script-message-to','component_updates','player'}},
         {title=text('Обновления компонентов','Component updates'),value={'script-binding','component_updates/menu'}},
         {title=text(busy and 'Создаём резервную копию…' or 'Создать резервную копию',busy and 'Creating backup…' or 'Create backup'),selectable=not busy,value={'script-message-to','player_maintenance','backup'}},
         {title=text('Настроить TorrServer','Configure TorrServer'),value={'script-message-to','player_maintenance','configure'}},

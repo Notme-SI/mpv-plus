@@ -188,8 +188,12 @@
     "maintenance/anime-online-tests.lua": "968336fe7a0729fa7b955595cd6569cc9b94e694c11670a15478d2aac592e7b9",
     "maintenance/anime-online-runtime-tests.lua": "ead1af5c1604bff41b239a761953e0b49f0f07e523bdab5cbc071deb932790fd",
     "maintenance/maintenance-menu-tests.lua": "4c2d432b66eb36b9f72ef8c5c962b44954db8da021e29cf5b9fb84d79306c50f",
-    "maintenance/Update-MPV.ps1": "697f19059c6fadf06668542b5af9da18196baf31ef2abf3822723defe73a5e93",
+    "maintenance/Update-MPV.ps1": "4cac9386a2762d0d84767dde9a765b45b3eac418de4043304400e886bd8cd93a",
     "maintenance/compatibility.lua": "0660ac236be32c61fb6ac352993efe5511618d12ee4abc9adeffbce7f3c14c37",
-    "maintenance/theintrodb-api-tests.lua": "30372ee0466517ebc6f50a6998b7d5097494cfa3707ffd42004b53c4ed5238b1"
+    "maintenance/theintrodb-api-tests.lua": "30372ee0466517ebc6f50a6998b7d5097494cfa3707ffd42004b53c4ed5238b1",
+    "scripts/component_updates.lua": "d6cfd587a35628b9834dfe18fe48a2397e3b9481ff4395c2bcfd61dc2d0987a5",
+    "scripts/player_maintenance.lua": "499922e0c2d783ad48d7c34581159414f06707e923effad99e9aa00d6ffde14c",
+    "maintenance/update-runtime-tests.lua": "9b7cfdc11ef65c28ad07e701bdf428181906d68248f26fd7b088330016d96175",
+    "maintenance/Update-Components.ps1": "92c50e7c8824e09f3f6000118e418927360528cfd84c5c612073fdf902c83cd4"
   }
 }

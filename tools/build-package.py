@@ -113,6 +113,12 @@ launcher.parent.mkdir(parents=True,exist_ok=True)
 subprocess.run([str(compiler),'/nologo','/target:winexe','/optimize+',f'/out:{launcher}',str(ROOT/'tools/LampaLauncher.cs')],check=True)
 files.pop('compat/mpv.exe', None)
 files['mpv.exe'] = launcher.read_bytes()
+updater = ROOT / 'dist' / 'updater' / 'mpv-update.exe'
+updater.parent.mkdir(parents=True, exist_ok=True)
+subprocess.run([str(compiler), '/nologo', '/target:winexe', '/optimize+',
+    '/reference:System.Windows.Forms.dll', '/reference:System.Drawing.dll', '/reference:System.Web.Extensions.dll',
+    '/win32icon:'+str(ROOT/'portable_config/assets/mpv-monochrome.ico'), f'/out:{updater}', str(ROOT/'tools/Updater.cs')], check=True)
+files['portable_config/maintenance/mpv-update.exe'] = updater.read_bytes()
 catalog = ROOT / 'portable_config/data/anime-catalog.json'
 if catalog.is_file():
     files['portable_config/data/anime-catalog.json'] = catalog.read_bytes()

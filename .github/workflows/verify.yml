@@ -18,6 +18,9 @@ jobs:
       - name: Check component updater patches
         shell: powershell
         run: ./tools/test-updater.ps1
+      - name: Check native updater
+        shell: powershell
+        run: ./tools/test-native-updater.ps1
       - name: Fetch pinned binary base
         shell: pwsh
         run: Invoke-WebRequest 'https://github.com/Notme-SI/mpv-plus/releases/download/v1.0.3/mpv%2B-1.0.3.zip' -OutFile "$env:RUNNER_TEMP/base.zip"

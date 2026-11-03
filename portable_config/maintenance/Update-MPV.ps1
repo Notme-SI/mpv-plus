@@ -1,7 +1,8 @@
 ﻿param(
     [ValidateSet('Interactive','Check','Update','Verify')][string]$Mode='Interactive',
     [switch]$Library,
-    [string]$ReportPath
+    [string]$ReportPath,
+    [string]$ProgressPath
 )
 $ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
@@ -14,6 +15,9 @@ function Normalize([string]$Text) { return $Text.Replace("`r`n","`n").TrimEnd("`
 function Write-Utf8([string]$Path,[string]$Text) {
     [IO.Directory]::CreateDirectory((Split-Path -Parent $Path)) | Out-Null
     [IO.File]::WriteAllText($Path,$Text,$Utf8)
+}
+function Report-Progress([string]$Stage,[string]$Component='') {
+    if($ProgressPath) { Write-Utf8 $ProgressPath (@{stage=$Stage;component=$Component}|ConvertTo-Json -Compress) }
 }
 function Apply-Patches([string]$Text,$Patches) {
     $Text=Normalize $Text
@@ -73,6 +77,7 @@ $reports=New-Object Collections.ArrayList
 $checkErrors=0
 $locallyModified=0
 foreach($entry in $manifest.entries) {
+    Report-Progress 'checking' $entry.name
     try {
         $meta=$null; $asset=$null; $releaseTag=$null
         $scope=if($entry.scope -eq 'player') {$PlayerRoot} else {$ConfigRoot}
@@ -115,6 +120,7 @@ if($ReportPath) {
 }
 $reports | Format-Table -AutoSize -Wrap | Out-Host
 if($available.Count -eq 0) {
+    Report-Progress 'complete'
     if($checkErrors -gt 0) { Write-Host 'Проверка завершена не полностью. Повторите позже.'; exit 1 }
     if($locallyModified -gt 0) { Write-Host 'Доступных обновлений нет. Локально изменённые компоненты пропущены.'; exit 0 }
     Write-Host 'Проверка завершена. Обновление не требуется.'
@@ -150,6 +156,7 @@ $candidates=New-Object Collections.ArrayList
 $prepareErrors=0
 foreach($update in $available) {
     $entry=$update.entry; $remoteVersion=$update.version; $meta=$update.meta; $asset=$update.asset
+    Report-Progress 'preparing' $entry.name
     try {
         # Stage each component in isolation; a rejected download must never leak
         # partially copied files into another component's validation.
@@ -223,6 +230,7 @@ foreach($update in $available) {
 }
 if($candidates.Count -eq 0) { Write-Host 'Нет готовых обновлений. Файлы плеера не изменены.'; exit 1 }
 $compatExe=if(Test-Path -LiteralPath (Join-Path $preparedPlayer 'mpv+.exe')) {Join-Path $preparedPlayer 'mpv+.exe'} else {Join-Path $PlayerRoot 'mpv+.exe'}
+Report-Progress 'validating'
 & (Join-Path $PSScriptRoot 'Test-Extensions.ps1') -Executable $compatExe -ConfigRoot $preparedConfig
 $smoke=Join-Path $work 'smoke.lua'
 Write-Utf8 $smoke "mp.add_timeout(2,function() print('MPV_BUILD_OK'); mp.commandv('quit') end)"
@@ -239,6 +247,7 @@ if($process.ExitCode -ne 0 -or $output -notmatch 'MPV_BUILD_OK' -or $output -mat
 }
 if($Mode -eq 'Verify') { Write-Host 'Проверено: загрузка релиза, контрольная сумма, сохранение доработок и запуск скриптов. Установка не выполнялась.'; exit 0 }
 Assert-PlayerClosed $exe
+Report-Progress 'installing'
 $originalManifest=[IO.File]::ReadAllBytes($manifestPath)
 $undo=New-Object Collections.ArrayList
 try {
@@ -281,4 +290,5 @@ if(@($candidates | Where-Object {$_.entry.kind -eq 'mpv'}).Count -gt 0) {
     catch { Write-Host 'Значок обновлён в файле. Если Windows показывает старый, повторно войдите в систему.' }
 }
 Write-Host 'Обновления установлены.'
+Report-Progress 'complete'
 if($prepareErrors -gt 0 -or $checkErrors -gt 0) { Write-Host 'Часть компонентов пропущена. Причины указаны выше.'; exit 1 }
