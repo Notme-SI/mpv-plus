@@ -4,6 +4,7 @@
     [string]$ReportPath
 )
 $ErrorActionPreference='Stop'
+$ProgressPreference='SilentlyContinue'
 if($PSVersionTable.PSVersion.Major -eq 5) { $env:PSModulePath=[Environment]::GetEnvironmentVariable('PSModulePath','Machine') }
 [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12
 $Utf8=New-Object Text.UTF8Encoding($false)
@@ -73,7 +74,7 @@ $checkErrors=0
 $locallyModified=0
 foreach($entry in $manifest.entries) {
     try {
-        $meta=$null; $asset=$null
+        $meta=$null; $asset=$null; $releaseTag=$null
         $scope=if($entry.scope -eq 'player') {$PlayerRoot} else {$ConfigRoot}
         $target=Join-Path $scope $entry.path
         if($entry.kind -eq 'source') {
@@ -82,6 +83,7 @@ foreach($entry in $manifest.entries) {
         } else {
             if(!$cache.ContainsKey($entry.repo)) { $cache[$entry.repo]=Get-Api ('https://api.github.com/repos/'+$entry.repo+'/releases/latest') }
             $release=$cache[$entry.repo]
+            $releaseTag=[string]$release.tag_name
             $asset=@($release.assets | Where-Object {$_.name -match $entry.assetPattern})
             if($asset.Count -ne 1) { throw 'Не удалось однозначно выбрать файл релиза.' }
             $asset=$asset[0]
@@ -100,7 +102,7 @@ foreach($entry in $manifest.entries) {
         if($modified) { $locallyModified++; continue }
         $eligible=if($Mode -eq 'Verify') {$entry.kind -in @('source','uosc')} else {$changed}
         if($eligible) {
-            [void]$available.Add([pscustomobject]@{entry=$entry; version=$remoteVersion; meta=$meta; asset=$asset})
+            [void]$available.Add([pscustomobject]@{entry=$entry; version=$remoteVersion; meta=$meta; asset=$asset; releaseTag=$releaseTag})
         }
     } catch {
         $checkErrors++
@@ -213,7 +215,7 @@ foreach($update in $available) {
             [IO.Directory]::CreateDirectory((Split-Path -Parent $dest))|Out-Null
             Copy-Item -LiteralPath (Join-Path $destinationRoot $rel) -Destination $dest -Force
         }
-        [void]$candidates.Add([pscustomobject]@{entry=$entry; version=$remoteVersion; files=$files})
+        [void]$candidates.Add([pscustomobject]@{entry=$entry; version=$remoteVersion; files=$files; releaseTag=$update.releaseTag})
     } catch {
         $prepareErrors++
         Write-Host ($entry.name+': не обновлён. '+$_.Exception.Message)
@@ -254,6 +256,9 @@ try {
             Copy-Item -LiteralPath (Join-Path $srcRoot $rel) -Destination $dest -Force
         }
         $entry.version=$candidate.version
+        if($entry.kind -in @('mpv','ffmpeg')) {
+            $entry | Add-Member -MemberType NoteProperty -Name releaseTag -Value $candidate.releaseTag -Force
+        }
         $entry.installedHash=(Get-FileHash -LiteralPath (Join-Path $destRoot $entry.path) -Algorithm SHA256).Hash
         if($entry.kind -eq 'uosc') {
             $hashes=@{}

@@ -4,10 +4,13 @@ import argparse
 import hashlib
 import subprocess
 import zipfile
+import json
+import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--base', type=Path, required=True, help='Clean mpv+ release ZIP (legacy MPV ZIP is also supported)')
+parser.add_argument('--runtime-dir', type=Path, help='Already prepared mpv+.exe and ffmpeg.exe; hashes must match the source manifest')
 args = parser.parse_args()
 base = args.base.resolve()
 checksums = (ROOT / 'releases/1.0.3/SHA256SUMS.txt').read_text().splitlines()
@@ -37,6 +40,63 @@ for name in tracked:
     path = PurePosixPath(name)
     if path.parts[0] in folders or (len(path.parts) == 1 and path.suffix in {'.cmd', '.txt'}):
         files[name] = (ROOT / name).read_bytes()
+
+# The fixed base supplies fonts and data. New releases may pin newer player
+# binaries: never ship those old binaries under a manifest describing new ones.
+components = json.loads(files['portable_config/maintenance/manifest.json'])
+runtime_entries = [entry for entry in components['entries'] if entry['kind'] in {'mpv', 'ffmpeg'}]
+for entry in runtime_entries:
+    name = entry['path']
+    expected_hash = entry['installedHash'].lower()
+    if args.runtime_dir:
+        content = (args.runtime_dir / name).read_bytes()
+    elif hashlib.sha256(files[name]).hexdigest() == expected_hash:
+        continue
+    else:
+        tag = entry.get('releaseTag') or entry['version']
+        api = f"https://api.github.com/repos/{entry['repo']}/releases/tags/{tag}"
+        request = urllib.request.Request(api, headers={'User-Agent': 'mpv-plus-builder'})
+        with urllib.request.urlopen(request, timeout=30) as response:
+            release = json.load(response)
+        import re
+        assets = [asset for asset in release['assets'] if re.search(entry['assetPattern'], asset['name'])]
+        if len(assets) != 1:
+            raise SystemExit('Ambiguous pinned runtime asset: ' + entry['name'])
+        asset = assets[0]
+        if entry['kind'] == 'ffmpeg' and asset['name'] != entry['version']:
+            raise SystemExit('Unexpected pinned FFmpeg asset')
+        digest = asset.get('digest', '')
+        if not re.fullmatch('sha256:[a-f0-9]{64}', digest):
+            raise SystemExit('Pinned runtime has no SHA-256 digest')
+        cache = ROOT / 'dist/runtime-cache' / tag / entry['kind']
+        cache.mkdir(parents=True, exist_ok=True)
+        archive_path = cache / asset['name']
+        if not archive_path.exists() or hashlib.sha256(archive_path.read_bytes()).hexdigest() != digest[7:]:
+            with urllib.request.urlopen(asset['browser_download_url'], timeout=180) as response:
+                archive_path.write_bytes(response.read())
+        if hashlib.sha256(archive_path.read_bytes()).hexdigest() != digest[7:]:
+            raise SystemExit('Runtime archive checksum mismatch')
+        seven = cache / '7zr.exe'
+        seven.write_bytes(files['7z/7zr.exe'])
+        unpack = cache / 'extracted'
+        unpack.mkdir(exist_ok=True)
+        subprocess.run([str(seven), 'x', '-y', '-o'+str(unpack), str(archive_path)], check=True, stdout=subprocess.DEVNULL)
+        upstream_name = 'mpv.exe' if entry['kind'] == 'mpv' else 'ffmpeg.exe'
+        candidates = list(unpack.rglob(upstream_name))
+        if len(candidates) != 1:
+            raise SystemExit('Unexpected runtime archive structure')
+        binary = candidates[0]
+        upstream_hash = entry.get('upstreamHash', entry['installedHash']).lower()
+        if hashlib.sha256(binary.read_bytes()).hexdigest() != upstream_hash:
+            raise SystemExit('Runtime binary checksum mismatch before branding')
+        if entry['kind'] == 'mpv':
+            subprocess.run(['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+                str(ROOT/'portable_config/maintenance/Set-MPVIcon.ps1'), '-ExecutablePath', str(binary),
+                '-IconPath', str(ROOT/'portable_config/assets/mpv-monochrome.ico')], check=True)
+        content = binary.read_bytes()
+    if hashlib.sha256(content).hexdigest() != expected_hash:
+        raise SystemExit('Prepared runtime differs from the source manifest: ' + entry['name'])
+    files[name] = content
 
 # Retire the previous launcher name when rebuilding from a legacy ZIP.
 files.pop('Обновить MPV.cmd',None)

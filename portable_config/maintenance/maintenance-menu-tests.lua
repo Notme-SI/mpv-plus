@@ -1,6 +1,8 @@
 return function(path)
     local real=mp
     local utils=require 'mp.utils'
+    local file=assert(io.open(path('maintenance/manifest.json'),'rb'))
+    local expected_version=assert(utils.parse_json(file:read('*a')).buildVersion);file:close()
     local saved_ui,saved_settings=package.loaded['mpv-build/ui_locale'],package.loaded['mpv-build/user_settings']
     local bindings,messages,menus,commands={},{},{},{}
     local function noop()end
@@ -18,12 +20,12 @@ return function(path)
         dofile(path('scripts/player_maintenance.lua'))
         bindings.menu()
         local item=menus[1].items[1]
-        assert(item.title=='Версия плеера' and item.hint=='mpv+ 1.1.2','Maintenance shows the distribution version, not mpv core version')
+        assert(item.title=='Версия плеера' and item.hint=='mpv+ '..expected_version,'Maintenance shows the distribution version, not mpv core version')
         assert(item.value[3]=='github')
         messages.github()
         local command=commands[#commands]
         assert(command.detach and command.args[3]=='-WindowStyle' and command.args[4]=='Hidden')
-        assert(command.args[#command.args]=='Start-Process "https://github.com/Notme-SI/mpv-plus/releases/tag/v1.1.2"','Version opens its matching GitHub release')
+        assert(command.args[#command.args]=='Start-Process "https://github.com/Notme-SI/mpv-plus/releases/tag/v'..expected_version..'"','Version opens its matching GitHub release')
     end,debug.traceback)
     mp=real
     package.loaded['mpv-build/ui_locale'],package.loaded['mpv-build/user_settings']=saved_ui,saved_settings

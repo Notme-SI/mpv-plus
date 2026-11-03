@@ -4,6 +4,7 @@
     [switch]$InspectOnly
 )
 $ErrorActionPreference='Stop'
+if($PSVersionTable.PSVersion.Major -eq 5) { $env:PSModulePath=[Environment]::GetEnvironmentVariable('PSModulePath','Machine') }
 if(-not ('MpvLampa.IconResource' -as [type])) {
 Add-Type -TypeDefinition @'
 using System;

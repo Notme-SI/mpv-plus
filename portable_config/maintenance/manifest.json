@@ -51,8 +51,8 @@
       "repo": "TheIntroDB/mpv-script",
       "remotePath": "scripts/theintrodb.lua",
       "path": "scripts/theintrodb.lua",
-      "version": "d88e3dd899e75fc00df31ce9e7072b6891e05135",
-      "installedHash": "cf6d8f3c7f48c57c87f0886e04267a1de5a81fca14b39f9e29f3906af9749200",
+      "version": "d9567e07cf144c47d6eb56007fa01baa13acfad4",
+      "installedHash": "292ff24fad272f4a7526548d277a321d501f1107f8ad452d852e9a45d686d40b",
       "patchFile": "patches/TheIntroDB.json"
     },
     {
@@ -140,9 +140,9 @@
       "repo": "zhongfly/mpv-winbuild",
       "assetPattern": "^mpv-x86_64-\\d{8}-git-[a-f0-9]+\\.7z$",
       "path": "mpv+.exe",
-      "version": "2026-10-13-c3ac7f3951",
-      "installedHash": "37a1fa0d978d09e1d8514546749d908dc41a83c004fd5ad10bf1d3955d765d80",
-      "upstreamHash": "99869f4532e60babf556d05363a23669f76d47b9b424acd17ab691452564898e"
+      "version": "2026-11-03-0d4aab5cf6",
+      "installedHash": "0EC04C3004C59B4CF47CBE905E039E93F782A949B128F864B811B86A531FB81C",
+      "upstreamHash": "47C9E9588A2F863490F86ECACC7D9360CF5E6B102320907373373F4A66C81C4D"
     },
     {
       "name": "FFmpeg",
@@ -151,11 +151,12 @@
       "repo": "zhongfly/mpv-winbuild",
       "assetPattern": "^ffmpeg-x86_64-git-[a-f0-9]+\\.7z$",
       "path": "ffmpeg.exe",
-      "version": "ffmpeg-x86_64-git-24e860f6d.7z",
-      "installedHash": "26eeeff0d4ef9b0e0bb0477410c37c73b0132bd42af31aabe6c0f2086b510cb5"
+      "version": "ffmpeg-x86_64-git-ec887b13a.7z",
+      "installedHash": "687CE26A75564E12F3B8224E8FF3EC0F049C650F881B36F904CA415467632B4B",
+      "releaseTag": "2026-11-03-0d4aab5cf6"
     }
   ],
-  "buildVersion": "1.1.1",
+  "buildVersion": "1.1.3",
   "extensionLayout": 2,
   "localFiles": {
     "extensions/lampa_context.lua": "4d61fa67cea50e12878474e2989f34a0cbf05d216ee39d7adf8352a2d8648e44",
@@ -186,6 +187,9 @@
     "extensions/anime_online.lua": "7fdd7363299861e26e84e7a16071c6f214a2eb68935233f60e46f48acf8386aa",
     "maintenance/anime-online-tests.lua": "968336fe7a0729fa7b955595cd6569cc9b94e694c11670a15478d2aac592e7b9",
     "maintenance/anime-online-runtime-tests.lua": "ead1af5c1604bff41b239a761953e0b49f0f07e523bdab5cbc071deb932790fd",
-    "maintenance/maintenance-menu-tests.lua": "465e1179b9d9ecbafce9bef65682605db4287232f06116c516d2726e44195012"
+    "maintenance/maintenance-menu-tests.lua": "4c2d432b66eb36b9f72ef8c5c962b44954db8da021e29cf5b9fb84d79306c50f",
+    "maintenance/Update-MPV.ps1": "697f19059c6fadf06668542b5af9da18196baf31ef2abf3822723defe73a5e93",
+    "maintenance/compatibility.lua": "0660ac236be32c61fb6ac352993efe5511618d12ee4abc9adeffbce7f3c14c37",
+    "maintenance/theintrodb-api-tests.lua": "30372ee0466517ebc6f50a6998b7d5097494cfa3707ffd42004b53c4ed5238b1"
   }
 }

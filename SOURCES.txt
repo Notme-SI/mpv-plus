@@ -31,8 +31,8 @@ tools/LampaLauncher.cs. Он передаёт аргументы основно�
 Сборка mpv и FFmpeg:
 https://github.com/zhongfly/mpv-winbuild
 https://github.com/zhongfly/mpv-winbuild-cmake
-https://github.com/mpv-player/mpv/tree/c3ac7f3951
-https://github.com/FFmpeg/FFmpeg/tree/24e860f6d
+https://github.com/mpv-player/mpv/tree/0d4aab5cf6
+https://github.com/FFmpeg/FFmpeg/tree/ec887b13a
 7-Zip: https://github.com/ip7z/7zip
 
 Базы названий аниме:
@@ -55,7 +55,7 @@ sub-select: https://github.com/CogentRedTester/mpv-sub-select
 Git blob: https://api.github.com/repos/CogentRedTester/mpv-sub-select/git/blobs/7a2a417f962f181a088b1a61649be5b115da18f9
 
 TheIntroDB: https://github.com/TheIntroDB/mpv-script
-Git blob: https://api.github.com/repos/TheIntroDB/mpv-script/git/blobs/d88e3dd899e75fc00df31ce9e7072b6891e05135
+Git blob: https://api.github.com/repos/TheIntroDB/mpv-script/git/blobs/d9567e07cf144c47d6eb56007fa01baa13acfad4
 
 TorrServer: https://github.com/pursvir/mpv-torrserver-loader
 Git blob: https://api.github.com/repos/pursvir/mpv-torrserver-loader/git/blobs/405de1ff7528147a768c86f92e88fd38b48fa204
@@ -67,10 +67,10 @@ GuessIt: https://github.com/guessit-io/guessit
 Версия: v4.4.0
 
 mpv: https://github.com/zhongfly/mpv-winbuild
-Версия: 2026-10-13-c3ac7f3951
+Версия: 2026-11-03-0d4aab5cf6
 
 FFmpeg: https://github.com/zhongfly/mpv-winbuild
-Версия: ffmpeg-x86_64-git-24e860f6d.7z
+Версия: ffmpeg-x86_64-git-ec887b13a.7z
 
 Readable titles: TMDB API (https://www.themoviedb.org/).
 This product uses the TMDB API but is not endorsed or certified by TMDB.
