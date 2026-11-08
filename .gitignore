@@ -14,7 +14,8 @@
 /portable_config/scripts/autochapters/bin/
 /portable_config/scripts/autochapters/anime.json
 /portable_config/data/anime-catalog.json
-/portable_config/fonts/
+/portable_config/fonts/*
+!/portable_config/fonts/lucide.ttf
 /doc/manual.pdf
 /doc/mpbindings.png
 /7z/

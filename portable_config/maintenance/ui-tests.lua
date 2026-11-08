@@ -27,11 +27,16 @@ return function(path)
     local boundary={Capacity=100,PiecesLength=100,Torrent={file_stats={{id=1,length=150},{id=2,length=200}}},
         Pieces={['1']={Size=100},['2']={Size=50},['3']={Size=100}}}
     assert(network.cache_time(boundary,2,20).seconds==15,'Clip boundary pieces to the selected file')
-    local seconds,estimated=network.player_time(0,230,1000,100)
-    assert(seconds==23 and estimated,'Fallback uses forward packet bytes and average file bitrate')
-    seconds,estimated=network.player_time(7,230,1000,100)
-    assert(seconds==7 and not estimated,'Prefer native packet timestamp coverage when available')
-    assert(network.player_time(nil,0,1000,100)==nil,'Missing packet telemetry stays unavailable')
+    local cache={['fw-bytes']=230}
+    assert(network.player_time(cache,0,nil,80)==23,'Fallback uses forward packet bytes and average file bitrate')
+    assert(network.player_time(cache,7,nil,80)==7,'Prefer native packet timestamp coverage when available')
+    cache['ts-per-stream']={{type='audio',['cache-duration']=30},{type='video',['reader-pts']=13,['cache-end']=22}}
+    assert(network.player_time(cache,0,nil,80)==9,'Video timestamps recover missing aggregate duration')
+    cache['ts-per-stream']=nil
+    cache['seekable-ranges']={{start=0,['end']=18},{start=40,['end']=80}}
+    assert(network.player_time(cache,0,12,80)==6,'Use only the cache range containing the current position')
+    assert(network.player_time(cache,0,25,nil)==nil,'A detached range and unknown bitrate do not imply playable seconds')
+    assert(network.player_time({},nil,nil,80)==nil,'Missing packet telemetry stays unavailable')
     local info=dofile(path('extensions/media_info.lua'))
     local function video(w,h,fps,codec) return {['demux-w']=w,['demux-h']=h,['demux-fps']=fps,codec=codec or 'hevc'} end
     local function badge(data,kind)
@@ -46,14 +51,19 @@ return function(path)
     assert(info.describe(video(nil,nil,math.huge),nil,{},0).fps==nil,'Invalid FPS')
     assert(#info.describe(nil,nil,{},0).badges==0,'New file clears old metadata')
     assert(info.describe({image=true,['demux-fps']=30},nil,{},60).fps==nil,'No FPS for cover images')
+    local hybrid=video(3840,2160,24)
+    hybrid['dolby-vision-profile']=8
+    local formats=info.describe(hybrid,nil,{gamma='pq',['scene-max-r']=300}).summary[1].text
+    assert(formats:find('HDR10+ · Dolby Vision P8',1,true),'Hybrid video shows both decoded HDR formats')
+    assert(badge(info.describe(video(3840,2160,24),nil,{gamma='pq',['max-luma']=1000}),'hdr')=='HDR10',
+        'Static mastering metadata alone does not imply HDR10+')
 
     local rich=info.describe(video(1920,1080,24000/1001,'h264'),{codec='aac',lang='rus',
         ['demux-channels']='stereo',['demux-channel-count']=2,['demux-samplerate']=48000,['demux-bitrate']=127000,decoder='aac'},{},nil)
     assert(rich.video.width==1920 and rich.video.fps==24000/1001 and rich.audio.samplerate==48000)
     assert(rich.summary[2].text=='Русский · AAC · 2.0 · 127 kbps','Audio summary uses real source values')
     assert(not rich.summary[1].text:find('60',1,true),'Display refresh must not replace source FPS')
-    -- Real renderer: cache percentage must describe time coverage, not the
-    -- unrelated loading-progress property; unknown values must not become zero.
+    -- Real renderer: the profile cap must not be displayed as progress.
     local native_mp=mp
     local overlay={update=function()end,remove=function(self)self.data=''end}
     local w,h=1280,720
@@ -62,22 +72,27 @@ return function(path)
             get_osd_size=function()return w,h end}
         local panel=dofile(path('extensions/buffering_panel.lua')).new({language=function()return 'ru'end})
         local sample={reason='seeking',seconds=23,profile={seconds=50},progress=100,speed=2*1048576,
-            forward_bytes=8*1048576,back_bytes=12*1048576,media=rich,hwdec='no',dropped=0,avsync=-.015}
+            forward_bytes=8*1048576,media=rich,hwdec='no',dropped=0,bitrate=42000000}
         panel.draw(sample)
-        assert(overlay.data:find('46%',1,true) and not overlay.data:find('100%',1,true),'Time coverage and loading progress are separate')
-        assert(overlay.data:find('Буфер: 23 из 50 сек. (46%)  ',1,true) and overlay.data:find('16.8 Мбит/с',1,true),'Whole seconds and bytes/s converted to decimal Mbit/s')
-        assert(overlay.data:find('Статистика',1,true) and overlay.data:find('}speed',1,true) and overlay.data:find('Статус: перемотка',1,true),'Statistics heading and separate state')
-        assert(overlay.data:find('Декодер: программный',1,true) and overlay.data:find('AAC',1,true),'Describe actual codecs and active decoding')
-        assert(overlay.data:find('-0.015',1,true),'Signed audio/video sync is retained')
+        assert(not overlay.data:find('46%',1,true) and not overlay.data:find('100%',1,true),'Buffer limit is not a progress target')
+        assert(overlay.data:find('В буфере 23 с',1,true) and overlay.data:find('Чтение mpv+: 16.8 Мбит/с',1,true))
+        assert(overlay.data:find('Перемотка',1,true) and overlay.data:find('Средний битрейт файла: 42.0 Мбит/с',1,true))
+        assert(overlay.data:find('Программный декодер',1,true) and not overlay.data:find('AAC',1,true))
         sample.torrent=true;sample.stat={download_speed=1025000,buffer={seconds=23,target=50}}
         panel.draw(sample)
-        assert(overlay.data:find('Буфер: 23 из 50 сек. (46%)  ',1,true) and overlay.data:find('download',1,true) and overlay.data:find('16.8 Мбит/с',1,true),'Pill reflects actual mpv cache and read speed')
-        sample.seconds=0;sample.stat.buffer={seconds=90,target=94};sample.stat.filled=100*1048576;sample.stat.capacity=100*1048576
+        assert(overlay.data:find('Загрузка торрента: 8.2 Мбит/с',1,true),'Torrent speed is separate from player throughput')
+        assert(overlay.data:find('В буфере 23 с · 8.2 Мбит/с',1,true) and not overlay.data:find('TorrServer',1,true),
+            'The compact pill includes torrent speed without the server name')
+        sample.seconds=0;sample.forward_bytes=0
+        sample.stat.buffer={seconds=90,target=94};sample.stat.filled=100*1048576;sample.stat.capacity=100*1048576
         panel.draw(sample)
-        assert(overlay.data:find('Буфер: 0 из 50 сек. (0%)',1,true) and overlay.data:find('100/100 МБ',1,true),'A full server cache must not masquerade as playable mpv buffer')
-        sample.seconds=23;panel.draw(sample)
-        assert(not overlay.data:find('TorrServer',1,true) and overlay.data:find('Загрузка:',1,true),'Compact statistics use the requested neutral heading')
-        assert(not overlay.data:find('≈',1,true) and not overlay.data:find('CPU',1,true),'No approximation sign or misleading CPU/FPS label')
+        assert(overlay.data:find('Буфер плеера: 0 МБ',1,true) and overlay.data:find('100 / 100 МБ',1,true),
+            'A full server cache must not masquerade as playable mpv buffer')
+        assert(not overlay.data:find('В буфере ',1,true) and overlay.data:match('}8%.2 Мбит/с%s*$'),
+            'The compact pill shows only the measured speed while the player buffer is empty')
+        assert(not overlay.data:find('\\1c&HD0D0D0',1,true),'All statistics text uses the same foreground')
+        sample.seconds=22.9;panel.draw(sample)
+        assert(overlay.data:find('В буфере 23 с',1,true) and not overlay.data:find('≈',1,true),'Display whole seconds without an approximation symbol')
         sample.torrent=false;sample.stat=nil
 
         for _,size in ipairs({{640,360},{1920,1080},{3840,2160}})do
@@ -85,10 +100,15 @@ return function(path)
             assert(overlay.res_x==w and overlay.res_y==h and not overlay.data:find('nan',1,true),'Scale to the actual OSD')
         end
         sample.seconds=nil;sample.speed=nil;sample.show_statistics=false;panel.draw(sample)
-        assert(overlay.data:find('Буфер: —',1,true) and not overlay.data:find('0%',1,true),'Missing telemetry is not a fake zero')
+        assert(overlay.data:match('}0%.0 Мбит/с%s*$'),'Missing measurements show the default speed')
         sample.show_buffer=false;panel.draw(sample);assert(overlay.data=='','Disabled overlays leave no stale ASS')
     end,debug.traceback)
     mp=native_mp;assert(ok_render,render_error)
+    local logos=dofile(path('extensions/title_artwork.lua'))
+    assert(logos.choose({{file_path='/english.png',iso_639_1='en',width=1000},
+        {file_path='/russian.png',iso_639_1='ru',width=450},{file_path='/neutral.webp',width=600}},'ru')=='/russian.png')
+    assert(logos.choose({{file_path='/unsafe/other.png',iso_639_1='ru'},{file_path='/vector.svg',iso_639_1='ru'},
+        {file_path='/fallback.png',iso_639_1='en'}},'ru')=='/fallback.png')
 
     -- Check the real numeric-input callback without creating settings or opening a window.
     local real=mp

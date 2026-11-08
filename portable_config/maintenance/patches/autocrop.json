@@ -1,7 +1,7 @@
 [
   {
-    "before": "require \"mp.options\".read_options(options)",
-    "after": "-- Local controller settings; the detector remains upstream.\noptions.auto_fill = true\noptions.check_interval = 8\nrequire \"mp.options\".read_options(options)"
+    "before": "require \"mp.options\".read_options(options, nil, function () end)",
+    "after": "-- Local controller settings; the detector remains upstream.\noptions.auto_fill = true\noptions.check_interval = 8\nrequire \"mp.options\".read_options(options, nil, function () end)"
   },
   {
     "before": "mp.add_key_binding(\"C\", \"toggle_crop\", on_toggle)\nmp.register_event(\"end-file\", cleanup)\nmp.register_event(\"file-loaded\", on_start)",

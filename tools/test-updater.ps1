@@ -32,4 +32,8 @@ Assert ((Apply-Patches $newVersion $patches) -ceq $expected) 'Unrelated upstream
 $first=[string]$patches[0].before
 Assert-Rejected { Apply-Patches ($source.Replace($first,'-- conflicting upstream description')) $patches }
 Assert-Rejected { Apply-Patches ($source+$first) $patches }
+$cropSource=Get-Content (Join-Path $root 'SOURCES/upstream/autocrop.lua') -Raw -Encoding UTF8
+$cropPatches=Get-Content (Join-Path $root 'portable_config/maintenance/patches/autocrop.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$cropInstalled=Get-Content (Join-Path $root 'portable_config/scripts/autocrop.lua') -Raw -Encoding UTF8
+Assert ((Apply-Patches $cropSource $cropPatches) -ceq (Normalize $cropInstalled)) 'The current autocrop source keeps the local controller and new option callback'
 Write-Host 'UPDATER_PATCHES_OK'

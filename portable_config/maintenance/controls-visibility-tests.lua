@@ -10,7 +10,7 @@ return function(path)
         observe_property=function(k,_,fn)observers[k]=fn end,
         set_property_native=function(k,v)props[k]=v;if observers[k]then observers[k](k,v)end end,
         get_property_native=function(k,d)if props[k]==nil then return d end;return props[k]end,
-        add_key_binding=function(_,k,fn)bindings[k]=fn end,register_script_message=noop,osd_message=noop,
+        add_key_binding=function(_,k,fn)bindings[k]=fn end,register_script_message=noop,register_event=noop,osd_message=noop,
         commandv=function(a,b,c,data)if a=='script-message-to'and c=='open-menu'then menus[#menus+1]=require('mp.utils').parse_json(data)end end}
     local ok,err=xpcall(function()
         mp=mock

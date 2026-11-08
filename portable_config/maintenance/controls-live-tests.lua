@@ -18,7 +18,7 @@ local function check()
             state.is_idle=false;state.duration=120;state.time=20
             state.time_human='00:20';state.destination_time_human='-01:40'
             Elements.timeline:decide_enabled()
-            -- The native Controls implementation used to force-hide on timeline hover.
+            -- Hovering the timeline used to hide the controls.
             Elements.timeline.is_hovered=true
             for _,element in Elements:ipairs()do element.proximity=0;element.proximity_raw=math.huge;element.forced_visibility=nil end
             assert(Elements.controls:get_visibility()==1,'Timeline hover cannot hide pinned controls')
@@ -29,7 +29,30 @@ local function check()
                     count=count+1
                 end
             end
-            assert(count>=10,'Bottom row includes actual controls and speed')
+            assert(count>=(Elements.controls.player_layout and 8 or 10),'Bottom row includes actual controls and speed')
+            local controls=Elements.controls.controls
+            if Elements.controls.player_layout then
+                local speed=controls[5].element
+                assert(math.abs((speed.ax+speed.bx)/2-display.width/2)<=1,'Speed is centered independently of side groups')
+                assert(Elements.timeline.by<Elements.controls.ay,'Timeline sits above the controls')
+                local timeline=Elements.timeline
+                local rail_left,rail_right=timeline:rail()
+                local elapsed,remaining=timeline:clock_centers(rail_left,rail_right)
+                local menu,fullscreen=controls[1].element,controls[11].element
+                assert(math.abs((menu.ax+menu.bx)/2-elapsed)<=1 and math.abs((fullscreen.ax+fullscreen.bx)/2-remaining)<=1,
+                    'Outer buttons align with the time labels')
+                for _,control in ipairs(controls) do
+                    local button=control.element
+                    assert(not button or button.icon~='play_arrow' and button.icon~='pause'
+                        and button.icon~='arrow_back_ios' and button.icon~='arrow_forward_ios','Transport is not duplicated below')
+                end
+                local old_width=display.width
+                display.width=300
+                Elements.controls:update_dimensions()
+                assert(speed.enabled,'Compact windows keep the centered speed control')
+                display.width=old_width
+                Elements.controls:update_dimensions()
+            end
             assert(Elements.timeline:get_visibility()==1 and Elements.timeline:render(),'Active seek rail stays rendered')
             state.time_human='00:26:53';state.destination_time_human='-01:58:07'
             local rail=Elements.timeline:render().text
@@ -48,18 +71,34 @@ local function check()
             end
             local volume=Elements.volume
             volume.proximity=1
+            local glyphs=dofile(root..'/extensions/lucide_glyphs.lua')
             local icons=0
             for event in volume:render().text:gmatch('[^\n]+')do
-                if event:find('volume_up',1,true)then
+                if event:find(glyphs.volume_up,1,true)then
                     local _,positions=event:gsub('\\pos%(','')
                     assert(positions==1,'Speaker has its own ASS position instead of the panel origin')
                     icons=icons+1
                 end
             end
             assert(icons==2,'Both speaker layers retain their own render events')
+            local indicator=Elements.pause_indicator
+            state.is_video=true;state.pause=true
+            state.has_playlist=true;state.playlist_pos=2;state.playlist_count=3
+            local zone=cursor.zone
+            local clicks={}
+            cursor.zone=function(_,key,_,callback) if key=='primary_click' then clicks[#clicks+1]=callback end end
+            local ok_center,result=pcall(indicator.render,indicator)
+            cursor.zone=zone
+            assert(ok_center and result and result.text:find('\\1c&H161616&',1,true) and #clicks==3,'Paused video has three clickable transport controls')
+            assert(result.text:find(glyphs.arrow_back_ios,1,true) and result.text:find(glyphs.arrow_forward_ios,1,true),'Episode arrows are rendered in the center')
+            mp.set_property_bool('pause',true);clicks[3]()
+            assert(not mp.get_property_bool('pause'),'Clicking the center control resumes playback')
+            state.pause=false;state.is_video=false
             volume.proximity=0
             top.proximity=1;top.render_titles.main='Example title'
-            assert(top:render().text:find('Example title',1,true),'Loaded media title remains visible on hover')
+            local title=top:render().text
+            assert(title:find('Example title',1,true) and title:find('2 / 3',1,true),'Loaded title and playlist position remain visible')
+            state.has_playlist=false;state.playlist_pos=0;state.playlist_count=0
             top.current_chapter={title='Hidden chapter',index=1}
             state.chapters={{title='Hidden chapter',time=0},{title='Next chapter',time=30}}
             local header=top:render().text
@@ -71,7 +110,23 @@ local function check()
             mp.set_property_native('user-data/player-ui/controls-always',false)
             mp.add_timeout(.2,function()
                 Elements.timeline.is_hovered=true
-                assert(Elements.controls:get_visibility()==-1,'Switch off restores native timeline hover behavior')
+                if Elements.controls.player_layout then
+                    local timeline,panel=Elements.timeline,Elements.controls
+                    assert(panel:get_visibility()==0 and timeline:get_visibility()==0,'Both hide away from the bottom area')
+                    timeline.proximity=1
+                    assert(panel:get_visibility()==1 and timeline:get_visibility()==1 and panel.controls[5].element:get_visibility()==1,
+                        'Hovering the timeline also shows the buttons and speed')
+                    timeline.proximity=0;panel.proximity=1
+                    assert(panel:get_visibility()==1 and timeline:get_visibility()==1,'Hovering the controls also shows the timeline')
+                    panel.proximity=0
+                    timeline.forced_visibility=1
+                    assert(panel:get_visibility()==1 and timeline:get_visibility()==1,'Flashing the timeline reveals the entire row')
+                    timeline.forced_visibility=nil
+                    local top=panel.controls[10].element
+                    assert(top.icon=='window_normal','The default layout replaces the pin')
+                else
+                    assert(Elements.controls:get_visibility()==-1,'A custom layout retains native timeline hover behavior')
+                end
                 Elements.timeline.is_hovered=false;state.is_idle=true;state.duration=nil;state.time=nil
                 Elements.timeline:decide_enabled()
                 assert(not Elements.timeline.enabled,'Idle rail disabled again when option off')

@@ -19,6 +19,20 @@ function Write-Utf8([string]$Path,[string]$Text) {
 function Report-Progress([string]$Stage,[string]$Component='') {
     if($ProgressPath) { Write-Utf8 $ProgressPath (@{stage=$Stage;component=$Component}|ConvertTo-Json -Compress) }
 }
+function Write-ComponentReport([string]$Result,[int]$Available,[int]$Updated,[int]$Skipped) {
+    if(!$ReportPath) { return }
+    $rows=@($reports | ForEach-Object { @{name=$_.Компонент;status=$_.Состояние;detail=$_.Причина} })
+    Write-Utf8 $ReportPath (@{components=$rows;available=$Available;updated=$Updated;skipped=$Skipped;result=$Result;failed=($checkErrors -gt 0)}|ConvertTo-Json -Depth 5)
+}
+function Set-ComponentOutcome([string]$Name,[string]$Status,[string]$Detail='') {
+    foreach($row in $reports) {
+        if($row.Компонент -eq $Name) {
+            $row.Состояние=$Status
+            $row | Add-Member -NotePropertyName Причина -NotePropertyValue $Detail -Force
+            return
+        }
+    }
+}
 function Apply-Patches([string]$Text,$Patches) {
     $Text=Normalize $Text
     foreach($patch in $Patches) {
@@ -114,12 +128,14 @@ foreach($entry in $manifest.entries) {
         [void]$reports.Add([pscustomobject]@{Компонент=$entry.name; Состояние=('Не удалось проверить: '+$_.Exception.Message)})
     }
 }
-if($ReportPath) {
-    $rows=@($reports | ForEach-Object { @{name=$_.Компонент;status=$_.Состояние} })
-    Write-Utf8 $ReportPath (@{components=$rows;available=$available.Count;failed=($checkErrors -gt 0)}|ConvertTo-Json -Depth 5)
-}
+if($Mode -eq 'Check') { Write-ComponentReport 'checked' $available.Count 0 ($checkErrors+$locallyModified) }
 $reports | Format-Table -AutoSize -Wrap | Out-Host
 if($available.Count -eq 0) {
+    if($Mode -eq 'Update') {
+        $skipped=$checkErrors+$locallyModified
+        $result=if($skipped -gt 0) {'skipped'} else {'unchanged'}
+        Write-ComponentReport $result 0 0 $skipped
+    }
     Report-Progress 'complete'
     if($checkErrors -gt 0) { Write-Host 'Проверка завершена не полностью. Повторите позже.'; exit 1 }
     if($locallyModified -gt 0) { Write-Host 'Доступных обновлений нет. Локально изменённые компоненты пропущены.'; exit 0 }
@@ -225,10 +241,16 @@ foreach($update in $available) {
         [void]$candidates.Add([pscustomobject]@{entry=$entry; version=$remoteVersion; files=$files; releaseTag=$update.releaseTag})
     } catch {
         $prepareErrors++
+        Set-ComponentOutcome $entry.name 'Пропущено' $_.Exception.Message
         Write-Host ($entry.name+': не обновлён. '+$_.Exception.Message)
     }
 }
-if($candidates.Count -eq 0) { Write-Host 'Нет готовых обновлений. Файлы плеера не изменены.'; exit 1 }
+$skipped=$prepareErrors+$checkErrors+$locallyModified
+if($candidates.Count -eq 0) {
+    if($Mode -eq 'Update') { Write-ComponentReport 'skipped' 0 0 $skipped }
+    Write-Host 'Нет готовых обновлений. Файлы плеера не изменены.'
+    exit 1
+}
 $compatExe=if(Test-Path -LiteralPath (Join-Path $preparedPlayer 'mpv+.exe')) {Join-Path $preparedPlayer 'mpv+.exe'} else {Join-Path $PlayerRoot 'mpv+.exe'}
 Report-Progress 'validating'
 & (Join-Path $PSScriptRoot 'Test-Extensions.ps1') -Executable $compatExe -ConfigRoot $preparedConfig
@@ -285,6 +307,11 @@ try {
     throw
 }
 $undo.Clear(); $originalManifest=$null; $original=$null
+foreach($candidate in $candidates) { Set-ComponentOutcome $candidate.entry.name 'Обновлено' }
+if($Mode -eq 'Update') {
+    $result=if($skipped -gt 0) {'partial'} else {'updated'}
+    Write-ComponentReport $result 0 $candidates.Count $skipped
+}
 if(@($candidates | Where-Object {$_.entry.kind -eq 'mpv'}).Count -gt 0) {
     try { & (Join-Path $PSScriptRoot 'Refresh-MPVIcon.ps1') -ExecutablePath (Join-Path $PlayerRoot 'mpv+.exe') -RebuildCache }
     catch { Write-Host 'Значок обновлён в файле. Если Windows показывает старый, повторно войдите в систему.' }

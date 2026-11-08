@@ -1,0 +1,45 @@
+-- Lucide Static 0.468.0, ISC. See LICENSES/Lucide-LICENSE.txt.
+return {
+    play_arrow = '', -- play
+    pause = '', -- pause
+    menu = '', -- menu
+    cloud = '', -- magnet
+    list_alt = '', -- list-video
+    push_pin = '', -- pin
+    pin_off = '', -- pin-off
+    window_normal = '', -- send-to-back
+    window_on_top = '', -- bring-to-front
+    arrow_back_ios = '', -- skip-back
+    arrow_forward_ios = '', -- skip-forward
+    subtitles = '', -- captions
+    subtitles_off = '', -- captions-off
+    graphic_eq = '', -- audio-lines
+    crop_free = '', -- maximize
+    fullscreen_exit = '', -- minimize
+    fullscreen = '', -- maximize
+    volume_up = '', -- volume-2
+    volume_down = '', -- volume-1
+    volume_off = '', -- volume-x
+    volume_mute = '', -- volume
+    speed = '', -- gauge
+    local_movies = '', -- film
+    download = '', -- download
+    loader = '', -- loader-circle
+    close = '', -- x
+    remove = '', -- minus
+    minimize = '', -- minus
+    crop_square = '', -- square
+    maximize = '', -- maximize
+    filter_list = '', -- list-filter
+    check = '', -- check
+    more_horiz = '', -- ellipsis
+    more_vert = '', -- ellipsis-vertical
+    skip_next = '', -- skip-forward
+    fast_forward = '', -- fast-forward
+    chevron_right = '', -- chevron-right
+    chevron_left = '', -- chevron-left
+    search = '', -- search
+    arrow_upward = '', -- arrow-up
+    arrow_downward = '', -- arrow-down
+    delete = '', -- trash-2
+}

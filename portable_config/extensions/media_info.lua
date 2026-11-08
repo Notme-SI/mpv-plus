@@ -14,7 +14,11 @@ end
 function M.language(value)
     return ({rus='Русский',ru='Русский',eng='English',en='English',jpn='日本語',ja='日本語'})[value] or value
 end
-function M.describe(video,audio,params,container_fps)
+function M.has_hdr10plus(params)
+    return params and (M.number(params['scene-max-r']) or M.number(params['scene-max-g'])
+        or M.number(params['scene-max-b']) or M.number(params['scene-avg']))~=nil
+end
+function M.describe(video,audio,params,container_fps,hdr10plus)
     local out={badges={},summary={}}
     local function add(kind,text)
         if text then out.badges[#out.badges+1]={kind=kind,text=text} end
@@ -32,7 +36,14 @@ function M.describe(video,audio,params,container_fps)
         end
         out.video={width=w,height=h,codec=M.codec(video.codec),profile=video['codec-profile'],decoder=video.decoder}
         add('video',out.video.codec)
-        if params.gamma=='pq' or params.gamma=='hlg' then add('hdr','HDR') end
+        local profile=M.number(video['dolby-vision-profile'])
+        local dolby=profile or params.colormatrix=='dolbyvision'
+        if hdr10plus or M.has_hdr10plus(params) then add('hdr','HDR10+')
+        elseif params.gamma=='hlg' then add('hdr','HLG')
+        elseif params.gamma=='pq' and not dolby then
+            add('hdr',M.number(params['max-luma']) and 'HDR10' or 'HDR')
+        end
+        if dolby then add('hdr',profile and ('Dolby Vision P'..profile) or 'Dolby Vision') end
         local fps=M.number(video['demux-fps']) or M.number(container_fps)
         out.video.fps=fps
         if fps then out.fps=string.format('%.3f',fps):gsub('0+$',''):gsub('%.$',''):gsub('%.',',')..' FPS' end

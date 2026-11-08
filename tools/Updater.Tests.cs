@@ -23,6 +23,11 @@ internal static class UpdaterTests {
         Reject(delegate { UpdateData.SetupAsset(UpdateData.Parse(metadata.Replace("sha256:","sha1:"))); });
         Reject(delegate { UpdateData.SetupAsset(UpdateData.Parse(metadata.Replace("\"draft\":false","\"draft\":true"))); });
         Reject(delegate { UpdateData.SetupAsset(UpdateData.Parse(metadata.Replace("-Setup.exe\",","-Other.exe\","))); });
+        var partial = UpdateData.Parse("{\"result\":\"partial\",\"updated\":2,\"skipped\":1}");
+        Assert(UpdateData.IsComponentResult("Update",1,partial),"A committed partial update is a result, not a fatal error");
+        Assert(!UpdateData.IsComponentResult("Update",1,null),"A failed update without a final report is fatal");
+        Assert(!UpdateData.IsComponentResult("Update",1,UpdateData.Parse("{\"result\":\"checked\"}")),"A preflight report cannot confirm installation");
+        Assert(!UpdateData.IsComponentResult("Update",1,UpdateData.Parse("{\"result\":\"updated\"}")),"A nonzero exit cannot report full success");
         string file=Path.GetTempFileName();
         try {
             File.WriteAllText(file,"fixture",Encoding.UTF8); string digest;

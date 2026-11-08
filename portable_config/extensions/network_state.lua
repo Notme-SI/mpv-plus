@@ -87,10 +87,29 @@ function M.cache_time(value,index,duration,context)
     return {file_size=size,seconds=bytes/rate,target=capacity and math.min(capacity,size)/rate,
         bytes=bytes,scope=scope,estimated=true}
 end
-function M.player_time(seconds,bytes,size,duration)
-    seconds=tonumber(seconds)
-    if seconds and seconds>0 and seconds<math.huge then return seconds,false end
-    if positive(bytes) and positive(size) and positive(duration) then return bytes*duration/size,true end
-    return seconds and seconds>=0 and seconds<math.huge and seconds or nil,false
+local function timestamp_span(cache)
+    local first,last=tonumber(cache['reader-pts']),tonumber(cache['cache-end'])
+    return positive(cache['cache-duration']) or first and last and positive(last-first)
+end
+function M.player_time(cache,seconds,position,bitrate)
+    local buffered=positive(seconds) or timestamp_span(cache)
+    if buffered then return buffered end
+    for _,track in ipairs(cache['ts-per-stream'] or {}) do
+        if track.type=='video' then
+            buffered=timestamp_span(track)
+            if buffered then return buffered end
+        end
+    end
+    if position then
+        for _,range in ipairs(cache['seekable-ranges'] or {}) do
+            if range.start and range['end'] and range.start<=position and position<range['end'] then
+                buffered=math.max(buffered or 0,range['end']-position)
+            end
+        end
+        if buffered then return buffered end
+    end
+    local bytes=positive(cache['fw-bytes'])
+    if bytes and positive(bitrate) then return bytes*8/bitrate end
+    if cache['fw-bytes']==0 or not bytes and tonumber(seconds)==0 then return 0 end
 end
 return M

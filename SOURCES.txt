@@ -17,6 +17,8 @@ Jikan — неофициальный сервис чтения каталога 
 Адаптеры и оставшиеся патчи: portable_config/maintenance/patches.
 Новые самостоятельные дополнения распространяются по MIT (LICENSES/LOCAL-ADDITIONS-MIT.txt).
 Изменения сторонних модулей сохраняют лицензии исходных компонентов.
+Значки интерфейса: Lucide Static 0.468.0 (ISC и уведомление Feather), https://lucide.dev/.
+Лицензия: LICENSES/Lucide-LICENSE.txt. Логотипы фильмов и сериалов запрашиваются из TMDB.
 
 В основном плеере mpv+.exe заменены только ресурсы значка. Код, манифест приложения и сведения
 о версии сохранены. Воспроизводимая замена: maintenance/Set-MPVIcon.ps1
@@ -31,8 +33,8 @@ tools/LampaLauncher.cs. Он передаёт аргументы основно�
 Сборка mpv и FFmpeg:
 https://github.com/zhongfly/mpv-winbuild
 https://github.com/zhongfly/mpv-winbuild-cmake
-https://github.com/mpv-player/mpv/tree/0d4aab5cf6
-https://github.com/FFmpeg/FFmpeg/tree/ec887b13a
+https://github.com/mpv-player/mpv/tree/8bc468896e
+https://github.com/FFmpeg/FFmpeg/tree/cc583787b
 7-Zip: https://github.com/ip7z/7zip
 
 Базы названий аниме:
@@ -43,7 +45,7 @@ https://github.com/erengy/anime-relations
 Компоненты:
 
 autocrop: https://github.com/mpv-player/mpv
-Git blob: https://api.github.com/repos/mpv-player/mpv/git/blobs/25bdd7297cc5c603e85708888620d73f1d80db08
+Git blob: https://api.github.com/repos/mpv-player/mpv/git/blobs/b8db1dc62b08216282dfb5e3c23fd1be424e99cb
 
 autochapters: https://github.com/po5/mpv-auto-chapters
 Git blob: https://api.github.com/repos/po5/mpv-auto-chapters/git/blobs/3fafabb55cb0168f711acfd6aa5da42fc6e34d8a
@@ -67,10 +69,10 @@ GuessIt: https://github.com/guessit-io/guessit
 Версия: v4.4.0
 
 mpv: https://github.com/zhongfly/mpv-winbuild
-Версия: 2026-11-03-0d4aab5cf6
+Версия: 2026-11-08-8bc468896e
 
 FFmpeg: https://github.com/zhongfly/mpv-winbuild
-Версия: ffmpeg-x86_64-git-ec887b13a.7z
+Версия: ffmpeg-x86_64-git-cc583787b.7z
 
 Readable titles: TMDB API (https://www.themoviedb.org/).
 This product uses the TMDB API but is not endorsed or certified by TMDB.

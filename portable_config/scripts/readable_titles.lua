@@ -68,8 +68,12 @@ local function publish(data,title,episode_title,episodes)
     if title then display_details.title=title end
     if episode_title then display_details.episode_title=episode_title end
     if episodes then display_details.episodes=episodes end
+    local display_name=display_details.title or data.title
+    local subtitle=data.episode and fmt.label(data,language,'',episode_title) or nil
     mp.set_property_native('user-data/readable-title',{text=text,language=language,
         source_title=data.title,title=display_details.title,tmdb_id=data.tmdb_id,season=data.season,
+        display_name=display_name,subtitle=subtitle,kind=data.kind,artwork=opts.online and not data.unresolved_context,
+        artwork_id=display_details.tmdb_id,
         tmdb_season=data.tmdb_season or data.season,tmdb_offset=data.tmdb_offset or 0,episodes=display_details.episodes})
     mp.set_property('title',text..' - mpv+')
 end
@@ -126,6 +130,7 @@ local function refresh()
     end
     local function resolved(id)
         if gen~=generation or not id then return end
+        display_details.tmdb_id=id
         local endpoint=data.kind..'/'..id
         local function season_names(title)
             if data.kind=='tv' and data.episode and (data.season~=nil or data.source~='lampa') then

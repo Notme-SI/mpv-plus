@@ -55,7 +55,7 @@ local options = {
 -- Local controller settings; the detector remains upstream.
 options.auto_fill = true
 options.check_interval = 8
-require "mp.options".read_options(options)
+require "mp.options".read_options(options, nil, function () end)
 
 local cropdetect_label = mp.get_script_name() .. "-cropdetect"
 

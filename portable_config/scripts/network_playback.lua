@@ -14,15 +14,35 @@ local diagnostics=false
 local stat,request,request_generation={},nil,0
 local cache_profile
 local samples,last_sample={},nil
+local function media_bitrate(path,duration)
+    if not duration or duration<=0 then return end
+    local context=mp.get_property_native('user-data/torrserver-context',{})
+    local size=tonumber(context.media==path and context.file_size or (stat.buffer or {}).file_size)
+    if not size and not path:match('^edl://') then
+        size=mp.get_property_number('file-size') or mp.get_property_number('stream-end')
+    end
+    if size and size>0 then return size*8/duration end
+end
+local function player_time(cache,bitrate)
+    -- During a seek, the playhead can still refer to the previous cache range.
+    local position=not mp.get_property_bool('seeking',false) and mp.get_property_number('time-pos')
+    return network.player_time(cache,mp.get_property_number('demuxer-cache-duration'),position,bitrate)
+end
 local function snapshot()
     local cache=mp.get_property_native('demuxer-cache-state',{})
-    return {time=mp.get_time(),position=mp.get_property_number('time-pos'),duration=mp.get_property_number('duration'),
+    local duration=mp.get_property_number('duration')
+    local bitrate=media_bitrate(mp.get_property('path',''),duration)
+    return {time=mp.get_time(),position=mp.get_property_number('time-pos'),duration=duration,
         seeking=mp.get_property_bool('seeking',false),paused=mp.get_property_bool('pause',false),
         paused_for_cache=mp.get_property_bool('paused-for-cache',false),core_idle=mp.get_property_bool('core-idle',false),
         eof=mp.get_property_bool('eof-reached',false),
         player_seconds=mp.get_property_number('demuxer-cache-duration'),player_bytes=cache['fw-bytes'],
+        shown_buffer_seconds=player_time(cache,bitrate),
         player_total_bytes=cache['total-bytes'],player_read_speed=mp.get_property_number('cache-speed'),
         player_cache_state=mp.get_property_number('cache-buffering-state'),
+        media_bitrate=bitrate,
+        hwdec=mp.get_property('hwdec-current'),dropped_frames=mp.get_property_number('frame-drop-count'),
+        decoder_dropped_frames=mp.get_property_number('decoder-frame-drop-count'),avsync=mp.get_property_number('avsync'),
         reader_pts=cache['reader-pts'],cache_end=cache['cache-end'],seekable_ranges=cache['seekable-ranges'],
         audio_pts=mp.get_property_number('audio-pts'),video_pts=mp.get_property_number('video-pts'),
         aid=mp.get_property_number('aid'),sid=mp.get_property_number('sid'),
@@ -111,6 +131,7 @@ mp.register_event('file-loaded',function() if session then session.loaded=true;c
 mp.add_periodic_timer(1,function()
     if session and session.active then
         local previous=session.time;capture()
+        if policy.network(session.path) then sample() end
         if not session.pause and session.time>previous and session.time-previous<3 then
             session.stable=session.stable+session.time-previous
             if session.stable>=60 then session.tries=0;session.stable=0 end
@@ -160,22 +181,21 @@ end
 local function loading_reason()
     if not session or not session.active or not policy.network(mp.get_property('path','')) then return end
     if not session.loaded then return 'opening' end
-    local loader=mp.get_property_native('user-data/torrserver-loading',{})
-    if loader.media==mp.get_property('path','') and type(loader.time)=='number' and mp.get_time()-loader.time<1.3 then
-        if loader.state=='opening' or loader.state=='connecting external files' then return 'opening' end
-        if loader.state=='caching' then return 'buffering' end
-    end
     if mp.get_property_bool('seeking',false) then return 'seeking' end
     if mp.get_property_bool('paused-for-cache',false) then return 'buffering' end
+    local idle=mp.get_property_bool('core-idle',false) and not mp.get_property_bool('eof-reached',false)
+    local loader=mp.get_property_native('user-data/torrserver-loading',{})
+    if idle and loader.media==mp.get_property('path','') and type(loader.time)=='number' and mp.get_time()-loader.time<1.3 then
+        if loader.state=='opening' or loader.state=='connecting external files' then return 'opening' end
+    end
     -- uosc can show its spinner for core-idle without paused-for-cache.
     local progress=mp.get_property_number('cache-buffering-state')
-    if mp.get_property_bool('core-idle',false) and not mp.get_property_bool('eof-reached',false)
-        and (not mp.get_property_bool('pause',false) or progress and progress<100) then return 'buffering' end
+    if idle and (not mp.get_property_bool('pause',false) or progress and progress<100) then return 'buffering' end
 end
 local function buffering() return loading_reason()~=nil end
 local draw_buffering
 local function poll_stat()
-    if not (diagnostics or buffering() and (mp.get_property_native('user-data/player-ui/statistics-visible',false) or mp.get_property_native('user-data/player-ui/buffer-visible',false))) or request then return end
+    if not (diagnostics or buffering()) or request then return end
     local stream=source.request_stream(mp.get_property('path',''))
     if not stream then stat={};return end
     local gen=request_generation
@@ -209,6 +229,7 @@ local function menu()
     elseif mp.get_property_bool('pause',false) and recovery.state=='playing' then state='Пауза' end
     local cache=mp.get_property_native('demuxer-cache-state',{})
     local context=mp.get_property_native('user-data/torrserver-context',{})
+    local bitrate=media_bitrate(mp.get_property('path',''),mp.get_property_number('duration'))
     local items={
         {title='Восстановление после обрыва',hint=opts.reconnect and 'ВКЛ' or 'ВЫКЛ',value={'script-binding','network_playback/toggle'}},
         {title='Буфер',items={
@@ -218,11 +239,12 @@ local function menu()
         }},
         {title='Источник',hint=source.stream(mp.get_property('path','')) and 'TorrServer' or policy.network(mp.get_property('path','')) and 'HTTP' or 'Файл',selectable=false},
         {title='Состояние',hint=state,selectable=false},
-        {title='Запас видео',hint=number(mp.get_property_number('demuxer-cache-duration'),'%.1f')..' '..ui.text('с'),selectable=false},
+        {title='Запас видео',hint=number(player_time(cache,bitrate))..' '..ui.text('с'),selectable=false},
         {title='Буфер плеера',hint=number(cache['fw-bytes'] and cache['fw-bytes']/1048576,'%.1f')..' '..ui.text('МБ'),selectable=false},
         {title='Буфер плеера назад',hint=number(cache['total-bytes'] and cache['fw-bytes'] and math.max(0,cache['total-bytes']-cache['fw-bytes'])/1048576,'%.1f')..' '..ui.text('МБ'),selectable=false},
         {title='Заполнение буфера',hint=number(mp.get_property_number('cache-buffering-state'))..' %',selectable=false},
         {title='Скорость чтения',hint=number(mp.get_property_number('cache-speed') and mp.get_property_number('cache-speed')*8/1000000,'%.1f')..' Мбит/с',selectable=false},
+        {title=ui.language()=='en' and 'Average file bitrate' or 'Средний битрейт файла',hint=number(bitrate and bitrate/1000000,'%.1f')..' '..(ui.language()=='en' and 'Mbps' or 'Мбит/с'),selectable=false},
         {title='Пропущено кадров',hint=number(mp.get_property_number('frame-drop-count')),selectable=false},
         {title='Разница аудио и видео',hint=number(mp.get_property_number('avsync'),'%.3f')..' '..ui.text('с'),selectable=false},
         {title=ui.language()=='en' and 'Save loading report' or 'Сохранить отчёт о загрузке',
@@ -258,14 +280,13 @@ draw_buffering=function()
     if loader.media~=path or type(loader.time)~='number' or mp.get_time()-loader.time>=1.3 then loader=nil end
     local context=mp.get_property_native('user-data/torrserver-context',{})
     if context.media~=path then context={} end
-    local size=context.file_size or (stat.buffer or {}).file_size
-    if not size and not path:match('^edl://') then size=mp.get_property_number('stream-end') end
-    local player_seconds,estimated=network.player_time(mp.get_property_number('demuxer-cache-duration'),cache['fw-bytes'],size,mp.get_property_number('duration'))
+    local bitrate=media_bitrate(path,mp.get_property_number('duration'))
     local data={active=reason~=nil,managed=session and session.active and policy.network(path) or false,
         reason=reason,torrent=source.stream(path)~=nil or loader~=nil,stat=stat,loader=loader,
-        seconds=player_seconds,player_estimated=estimated,speed=mp.get_property_number('cache-speed'),
+        seconds=player_time(cache,bitrate),speed=mp.get_property_number('cache-speed'),
         forward_bytes=cache['fw-bytes'],back_bytes=cache['total-bytes'] and cache['fw-bytes'] and math.max(0,cache['total-bytes']-cache['fw-bytes']),
         progress=mp.get_property_number('cache-buffering-state'),dropped=mp.get_property_number('frame-drop-count'),
+        bitrate=bitrate,
         avsync=mp.get_property_number('avsync'),profile=cache_profile,
         media=mp.get_property_native('user-data/media-info',{}),hwdec=mp.get_property('hwdec-current'),
         display_fps=mp.get_property_number('display-fps'),
@@ -279,7 +300,7 @@ draw_buffering=function()
     panel.draw(data)
 end
 mp.add_key_binding(nil,'report',function()
-    -- A numeric snapshot is enough to diagnose stalled seeks. Never export
+    -- Keep playback counters and decoder mode. Never export
     -- stream URLs, credentials, torrent metadata, filenames or track titles.
     local report={format=1,created=os.date('!%Y-%m-%dT%H:%M:%SZ'),
         source=source.stream(mp.get_property('path','')) and 'TorrServer' or policy.network(mp.get_property('path','')) and 'HTTP' or 'file',
@@ -325,6 +346,9 @@ for _,property in ipairs({'osd-dimensions','user-data/player-ui/buffer-visible',
     'user-data/interface-language','user-data/media-info','hwdec-current','display-fps','user-data/torrserver-context','user-data/player-ui/icon-style'}) do
     mp.observe_property(property,'native',function()draw_buffering()end)
 end
+mp.observe_property('demuxer-cache-state','native',function()
+    if buffering() then draw_buffering() end
+end)
 mp.observe_property('user-data/torrserver-loading','native',refresh_telemetry)
 mp.register_event('file-loaded',refresh_telemetry)
 mp.register_event('playback-restart',refresh_telemetry)

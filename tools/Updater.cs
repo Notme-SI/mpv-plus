@@ -14,7 +14,7 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 [assembly: AssemblyTitle("mpv+ Updates")]
-[assembly: AssemblyVersion("1.1.3.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
 
 internal static class UpdateData {
     internal static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = 4194304 };
@@ -23,6 +23,14 @@ internal static class UpdateData {
         object value; return data != null && data.TryGetValue(key, out value) ? Convert.ToString(value) : "";
     }
     internal static Dictionary<string, object> Parse(string text) { return Json.Deserialize<Dictionary<string, object>>(text); }
+    internal static bool IsComponentResult(string mode, int exitCode, IDictionary<string, object> report) {
+        var result = Text(report, "result");
+        if (exitCode != 0 && exitCode != 1) return false;
+        if (mode == "Check") return result == "checked";
+        if (mode != "Update") return false;
+        if (result == "partial" || result == "skipped") return true;
+        return exitCode == 0 && (result == "updated" || result == "unchanged");
+    }
     internal static Version VersionOf(string text) {
         Version version;
         if (!Regex.IsMatch(text ?? "", @"^v?\d+\.\d+\.\d+$") || !Version.TryParse(text.TrimStart('v'), out version)) throw new InvalidDataException("Invalid release version");
@@ -61,6 +69,18 @@ internal static class UpdateData {
     }
 }
 
+internal static class UpdateColors {
+    // Dark palette from Lampa View's CUB theme.
+    internal static readonly Color Background = Color.Black;
+    internal static readonly Color Surface = Color.FromArgb(0x12, 0x10, 0x0c);
+    internal static readonly Color Button = Color.FromArgb(0x21, 0x1f, 0x1b);
+    internal static readonly Color Selection = Color.FromArgb(0x30, 0x29, 0x1f);
+    internal static readonly Color Text = Color.FromArgb(0xee, 0xef, 0xf2);
+    internal static readonly Color Muted = Color.FromArgb(0x92, 0x99, 0xa3);
+    internal static readonly Color Gold = Color.FromArgb(0xd8, 0xc3, 0x9a);
+    internal static readonly Color GoldHover = Color.FromArgb(0xe8, 0xd8, 0xb7);
+}
+
 internal sealed class UpdateProgress : Control {
     internal int Value;
     internal bool Active;
@@ -72,8 +92,8 @@ internal sealed class UpdateProgress : Control {
         timer.Start();
     }
     protected override void OnPaint(PaintEventArgs e) {
-        e.Graphics.Clear(Color.FromArgb(49, 49, 61));
-        using (var brush = new SolidBrush(Color.FromArgb(165, 139, 250))) {
+        e.Graphics.Clear(UpdateColors.Selection);
+        using (var brush = new SolidBrush(UpdateColors.Gold)) {
             if (Active && Value < 0) e.Graphics.FillRectangle(brush, position - 160, 0, 160, Height);
             else e.Graphics.FillRectangle(brush, 0, 0, Width * Math.Max(0, Math.Min(100, Value)) / 100, Height);
         }
@@ -87,17 +107,22 @@ internal sealed class UpdateButton : Button {
     protected override void OnMouseEnter(EventArgs e) { hover=true; Invalidate(); base.OnMouseEnter(e); }
     protected override void OnMouseLeave(EventArgs e) { hover=false; Invalidate(); base.OnMouseLeave(e); }
     protected override void OnPaint(PaintEventArgs e) {
-        e.Graphics.Clear(Enabled ? (hover ? ControlPaint.Light(BackColor, .12f) : BackColor) : Color.FromArgb(40,40,50));
-        TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, Enabled ? ForeColor : Color.FromArgb(121,121,140), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        Color background = !Enabled ? UpdateColors.Surface : !hover ? BackColor
+            : BackColor == UpdateColors.Gold ? UpdateColors.GoldHover : UpdateColors.Selection;
+        e.Graphics.Clear(background);
+        TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, Enabled ? ForeColor : UpdateColors.Muted,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak);
         if(Focused && ShowFocusCues) ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(ClientRectangle,-4,-4));
     }
 }
 
 internal sealed class UpdateWindow : Form {
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
     private readonly string root, config, work, log;
     private readonly bool english;
     private readonly int playerPid;
-    private readonly Color surface = Color.FromArgb(29, 29, 37), muted = Color.FromArgb(163, 163, 181), accent = Color.FromArgb(165, 139, 250);
+    private static readonly Color surface = UpdateColors.Surface, muted = UpdateColors.Muted, accent = UpdateColors.Gold;
     private readonly Label subtitle = new Label(), status = new Label(), hint = new Label(), playerInfo = new Label();
     private readonly Button playerTab = new UpdateButton(), componentsTab = new UpdateButton(), check = new UpdateButton(), install = new UpdateButton(), close = new UpdateButton(), details = new UpdateButton();
     private readonly Panel content = new Panel(), playerPanel = new Panel();
@@ -120,41 +145,57 @@ internal sealed class UpdateWindow : Form {
         string logs = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "mpv-plus"); Directory.CreateDirectory(logs); log = Path.Combine(logs, "update.log");
         var manifest = UpdateData.Parse(File.ReadAllText(Path.Combine(config, "maintenance/manifest.json"), Encoding.UTF8));
         version = UpdateData.Text(manifest, "buildVersion"); UpdateData.VersionOf(version);
-        Text = T("mpv+ — Обновления", "mpv+ — Updates"); BackColor = Color.FromArgb(21, 21, 28); ForeColor = Color.FromArgb(239, 239, 246);
+        Text = T("mpv+ — Обновления", "mpv+ — Updates"); BackColor = UpdateColors.Background; ForeColor = UpdateColors.Text;
         Font = new Font("Segoe UI", 10); AutoScaleMode = AutoScaleMode.Dpi; AutoScaleDimensions = new SizeF(96, 96);
         ClientSize = new Size(820, 700); MinimumSize = new Size(740, 620); StartPosition = FormStartPosition.CenterScreen;
         try { Icon = new Icon(Path.Combine(config, "assets/mpv-monochrome.ico")); } catch { }
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(28, 24, 28, 22), ColumnCount = 1, RowCount = 5 };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 86)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 86)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
         Controls.Add(layout);
-        var heading = new Panel { Dock = DockStyle.Fill };
-        var title = new Label { Text = T("Обновления", "Updates"), Font = new Font("Segoe UI Semibold", 24), AutoSize = true, Location = new Point(0, -3) };
-        subtitle.Text = T("mpv+ ", "mpv+ ") + version + T("  ·  Плеер и компоненты в одном месте", "  ·  Your player and components in one place"); subtitle.ForeColor = muted; subtitle.AutoSize = true; subtitle.Location = new Point(2, 48);
-        heading.Controls.Add(title); heading.Controls.Add(subtitle); layout.Controls.Add(heading, 0, 0);
+        var heading = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, Padding = new Padding(0, 0, 0, 12) };
+        var title = new Label { Text = T("Обновления", "Updates"), Font = new Font("Segoe UI Semibold", 24), AutoSize = true, ForeColor = accent };
+        subtitle.Text = "mpv+ " + version + T("  ·  Плеер и компоненты в одном месте", "  ·  Your player and components in one place");
+        subtitle.ForeColor = muted; subtitle.AutoSize = true;
+        heading.Controls.Add(title, 0, 0); heading.Controls.Add(subtitle, 0, 1); layout.Controls.Add(heading, 0, 0);
         var tabs = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
         StyleButton(playerTab, T("Плеер mpv+", "mpv+ player"), 150); StyleButton(componentsTab, T("Компоненты", "Components"), 150);
         tabs.Controls.Add(playerTab); tabs.Controls.Add(componentsTab); layout.Controls.Add(tabs, 0, 1);
-        content.Dock = DockStyle.Fill; content.BackColor = surface; content.Padding = new Padding(18); layout.Controls.Add(content, 0, 2);
+        content.Dock = DockStyle.Fill; content.BackColor = surface; content.Padding = new Padding(14); layout.Controls.Add(content, 0, 2);
         playerPanel.Dock = DockStyle.Fill;
-        playerInfo.Dock = DockStyle.Top; playerInfo.Height = 46; playerInfo.Font = new Font("Segoe UI Semibold", 12); playerInfo.Text = T("Установлена версия ", "Installed version ") + version;
+        playerInfo.Dock = DockStyle.Top; playerInfo.AutoSize = true; playerInfo.Padding = new Padding(0, 0, 0, 12);
+        playerInfo.Font = new Font("Segoe UI Semibold", 12); playerInfo.Text = T("Установлена версия ", "Installed version ") + version;
         notes.Dock = DockStyle.Fill; notes.ReadOnly = true; notes.BorderStyle = BorderStyle.None; notes.BackColor = surface; notes.ForeColor = muted; notes.Font = new Font("Segoe UI", 10); notes.DetectUrls = false;
         notes.Text = T("Проверим новый выпуск mpv+ на GitHub.\n\nОбновление всего плеера включает интерфейс, скрипты и компоненты сборки. Личные настройки сохраняются.", "Check GitHub for a new mpv+ release.\n\nA player update includes the interface, scripts and bundled components. Your personal settings are preserved.");
         playerPanel.Controls.Add(notes); playerPanel.Controls.Add(playerInfo);
         rows.Dock = DockStyle.Fill; rows.BackgroundColor = surface; rows.BorderStyle = BorderStyle.None; rows.ReadOnly = true; rows.AllowUserToAddRows = false; rows.AllowUserToDeleteRows = false; rows.AllowUserToResizeRows = false; rows.RowHeadersVisible = false;
-        rows.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; rows.SelectionMode = DataGridViewSelectionMode.FullRowSelect; rows.MultiSelect = false; rows.EnableHeadersVisualStyles = false; rows.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal; rows.GridColor = Color.FromArgb(47, 47, 59);
-        rows.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle { BackColor = surface, ForeColor = muted, Font = new Font("Segoe UI", 9), Padding = new Padding(0, 7, 0, 7), SelectionBackColor = surface };
-        rows.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None; rows.ColumnHeadersHeight = 38;
-        rows.DefaultCellStyle = new DataGridViewCellStyle { BackColor = surface, ForeColor = ForeColor, SelectionBackColor = Color.FromArgb(45, 42, 61), SelectionForeColor = ForeColor, Padding = new Padding(0, 7, 0, 7) };
-        rows.RowTemplate.Height = 31; rows.Columns.Add("name", T("Компонент", "Component")); rows.Columns.Add("status", T("Состояние", "Status")); rows.Columns[0].FillWeight = 35; rows.Columns[1].FillWeight = 65;
-        var statePanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(0, 15, 0, 0) };
-        status.Location = new Point(0, 15); status.Size = new Size(740, 23); status.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top;
-        hint.Location = new Point(0, 41); hint.Size = new Size(740, 20); hint.ForeColor = muted; hint.Font = new Font("Segoe UI", 9); hint.Anchor = status.Anchor; hint.AutoEllipsis = true;
+        rows.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill; rows.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
+        rows.SelectionMode = DataGridViewSelectionMode.FullRowSelect; rows.MultiSelect = false; rows.EnableHeadersVisualStyles = false;
+        rows.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal; rows.GridColor = UpdateColors.Selection;
+        rows.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle { BackColor = surface, ForeColor = accent, Font = new Font("Segoe UI", 9), Padding = new Padding(6), SelectionBackColor = surface, SelectionForeColor = accent };
+        rows.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
+        rows.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+        rows.DefaultCellStyle = new DataGridViewCellStyle { BackColor = surface, ForeColor = ForeColor, SelectionBackColor = UpdateColors.Selection, SelectionForeColor = ForeColor, Padding = new Padding(6, 4, 6, 4), WrapMode = DataGridViewTriState.True };
+        rows.Columns.Add("name", T("Компонент", "Component")); rows.Columns.Add("status", T("Состояние", "Status")); rows.Columns[0].FillWeight = 35; rows.Columns[1].FillWeight = 65;
+        var statePanel = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, Padding = new Padding(0, 10, 0, 0) };
+        status.AutoSize = true;
+        hint.AutoSize = true; hint.ForeColor = muted; hint.Font = new Font("Segoe UI", 9);
         hint.Text = T("Плеер закроется только при установке. Настройки сохранятся.", "The player closes only when installing. Your settings are preserved.");
-        progress.Dock = DockStyle.Bottom; statePanel.Controls.Add(status); statePanel.Controls.Add(hint); statePanel.Controls.Add(progress); layout.Controls.Add(statePanel, 0, 3);
+        progress.Dock = DockStyle.Fill; progress.Margin = new Padding(0, 8, 0, 0);
+        statePanel.Controls.Add(status, 0, 0); statePanel.Controls.Add(hint, 0, 1); statePanel.Controls.Add(progress, 0, 2);
+        layout.Controls.Add(statePanel, 0, 3);
+        statePanel.SizeChanged += delegate {
+            status.MaximumSize = new Size(Math.Max(1, statePanel.ClientSize.Width - status.Margin.Horizontal), 0);
+            hint.MaximumSize = new Size(Math.Max(1, statePanel.ClientSize.Width - hint.Margin.Horizontal), 0);
+        };
+        playerPanel.SizeChanged += delegate { playerInfo.MaximumSize = new Size(Math.Max(1, playerPanel.ClientSize.Width), 0); };
         var actions = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Padding = new Padding(0, 7, 0, 0) };
         actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 142)); actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 186)); actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105));
         StyleButton(details, T("Журнал", "View log"), 105); StyleButton(check, T("Проверить", "Check again"), 134); StyleButton(install, T("Установить", "Install update"), 178); StyleButton(close, T("Закрыть", "Close"), 97);
-        details.ForeColor = muted; install.BackColor = Color.FromArgb(126, 88, 214); install.ForeColor = Color.White;
+        foreach (var button in new[] { check, install, close }) button.Dock = DockStyle.Fill;
+        details.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Bottom;
+        details.ForeColor = muted; install.BackColor = accent; install.ForeColor = UpdateColors.Button;
         actions.Controls.Add(details, 0, 0); actions.Controls.Add(check, 1, 0); actions.Controls.Add(install, 2, 0); actions.Controls.Add(close, 3, 0); layout.Controls.Add(actions, 0, 4);
         details.Click += delegate { if (File.Exists(log)) Process.Start(new ProcessStartInfo("notepad.exe", UpdateData.Quote(log)) { UseShellExecute = false }); };
         check.Click += delegate { CheckUpdates(); }; install.Click += delegate { InstallUpdates(); }; close.Click += delegate { if (busy && !installing) CancelCheck(); else if (!busy) Close(); };
@@ -163,15 +204,23 @@ internal sealed class UpdateWindow : Form {
         poll.Tick += delegate { ReadProgress(); }; poll.Start();
         components = componentView; SelectView(componentView); Shown += delegate { CheckUpdates(); };
     }
+    protected override void OnHandleCreated(EventArgs e) {
+        base.OnHandleCreated(e);
+        const int useImmersiveDarkMode = 20;
+        int dark = 1;
+        if (DwmSetWindowAttribute(Handle, useImmersiveDarkMode, ref dark, sizeof(int)) != 0)
+            DwmSetWindowAttribute(Handle, 19, ref dark, sizeof(int));
+    }
     private string T(string ru, string en) { return english ? en : ru; }
     private void CancelCheck() { cancelled=true; try { var child=backend; if(child!=null && !child.HasExited) child.Kill(); } catch(InvalidOperationException) { } }
     private void StyleButton(Button button, string text, int width) {
-        button.Text = text; button.Size = new Size(width, 35); button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderSize = 0; button.BackColor = surface; button.ForeColor = ForeColor; button.Cursor = Cursors.Hand; button.Margin = new Padding(0, 0, 8, 0); button.UseVisualStyleBackColor = false;
+        button.Text = text; button.Size = new Size(width, 35); button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderSize = 0; button.BackColor = UpdateColors.Button; button.ForeColor = ForeColor; button.Cursor = Cursors.Hand; button.Margin = new Padding(0, 0, 8, 0); button.UseVisualStyleBackColor = false;
     }
     private void UI(Action action) { if (!IsDisposed && IsHandleCreated) BeginInvoke(action); }
     private void SelectView(bool value) {
         if (busy) return; components = value; content.Controls.Clear(); content.Controls.Add(value ? (Control)rows : playerPanel);
-        playerTab.ForeColor = value ? muted : accent; componentsTab.ForeColor = value ? accent : muted;
+        playerTab.BackColor = value ? UpdateColors.Button : accent; playerTab.ForeColor = value ? ForeColor : UpdateColors.Button;
+        componentsTab.BackColor = value ? accent : UpdateColors.Button; componentsTab.ForeColor = value ? UpdateColors.Button : ForeColor;
         status.Text = T("Готово к проверке", "Ready to check"); install.Enabled = false;
     }
     private void SetBusy(bool value, bool isInstall) {
@@ -189,13 +238,9 @@ internal sealed class UpdateWindow : Form {
     private void CheckUpdates() {
         if (busy) return; install.Enabled = false; available = 0; asset = null; status.Text = T("Проверяем обновления…", "Checking for updates…"); hint.ForeColor = muted; hint.Text = T("Получаем актуальные версии с GitHub", "Getting current versions from GitHub");
         if (components) {
-            Run(delegate { RunBackend("Check"); }, delegate {
-                var report = UpdateData.Parse(File.ReadAllText(Path.Combine(work, "report.json"), Encoding.UTF8)); rows.Rows.Clear();
-                foreach (object item in (IEnumerable)report["components"]) {
-                    var row = (Dictionary<string, object>)item; string state = UpdateData.Text(row, "status"); int index = rows.Rows.Add(UpdateData.Text(row, "name"), TranslateStatus(state));
-                    rows.Rows[index].Cells[1].Style.ForeColor = state == "Актуально" ? Color.FromArgb(142, 206, 168) : state == "Есть обновление" ? accent : Color.FromArgb(231, 184, 126);
-                }
-                available = Convert.ToInt32(report["available"]); install.Enabled = available > 0; rows.ClearSelection();
+            Dictionary<string, object> report = null;
+            Run(delegate { report = RunBackend("Check"); }, delegate {
+                ShowComponents(report);
                 status.Text = available > 0 ? T("Доступно обновлений: ", "Updates available: ") + available : T("Все компоненты актуальны", "All components are up to date");
                 if (UpdateData.Text(report, "failed").Equals("True", StringComparison.OrdinalIgnoreCase)) status.Text = T("Часть компонентов не удалось проверить", "Some components could not be checked");
                 hint.Text = T("Локальные изменения защищены. Перед установкой проверяется совместимость.", "Local changes are protected. Compatibility is checked before installation.");
@@ -216,15 +261,37 @@ internal sealed class UpdateWindow : Form {
             }, false);
         }
     }
-    private string TranslateStatus(string state) {
+    private void ShowComponents(Dictionary<string, object> report) {
+        rows.Rows.Clear();
+        foreach (object item in (IEnumerable)report["components"]) {
+            var row = (Dictionary<string, object>)item;
+            string state = UpdateData.Text(row, "status");
+            string detail = UpdateData.Text(row, "detail");
+            int index = rows.Rows.Add(UpdateData.Text(row, "name"), TranslateStatus(state, detail));
+            rows.Rows[index].Cells[1].Style.ForeColor = state == "Актуально" || state == "Обновлено" ? muted : accent;
+        }
+        available = Convert.ToInt32(report["available"]);
+        install.Enabled = available > 0;
+        rows.ClearSelection();
+    }
+    private string TranslateStatus(string state, string detail) {
+        if (state == "Пропущено") {
+            if (!english) return detail == "" ? state : state + ". " + detail;
+            return detail.StartsWith("Исходник изменился рядом", StringComparison.Ordinal)
+                ? "Skipped. The upstream change conflicts with an mpv+ patch."
+                : "Skipped. See the update log for details.";
+        }
         if (!english) return state;
         if (state == "Актуально") return "Up to date"; if (state == "Есть обновление") return "Update available";
+        if (state == "Обновлено") return "Updated";
         if (state.StartsWith("Локально изменён")) return "Local changes preserved"; return "Could not check";
     }
-    private void RunBackend(string mode) {
+    private Dictionary<string, object> RunBackend(string mode) {
         progressFile = Path.Combine(work, "progress.json"); if (File.Exists(progressFile)) File.Delete(progressFile);
+        string reportPath = Path.Combine(work, "report.json");
+        if (File.Exists(reportPath)) File.Delete(reportPath);
         string script = Path.Combine(config, "maintenance/Update-MPV.ps1");
-        var start = new ProcessStartInfo("powershell.exe", "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File " + UpdateData.Quote(script) + " -Mode " + mode + " -ReportPath " + UpdateData.Quote(Path.Combine(work, "report.json")) + " -ProgressPath " + UpdateData.Quote(progressFile));
+        var start = new ProcessStartInfo("powershell.exe", "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File " + UpdateData.Quote(script) + " -Mode " + mode + " -ReportPath " + UpdateData.Quote(reportPath) + " -ProgressPath " + UpdateData.Quote(progressFile));
         start.UseShellExecute = false; start.CreateNoWindow = true; start.WindowStyle = ProcessWindowStyle.Hidden; start.RedirectStandardOutput = true; start.RedirectStandardError = true; start.StandardOutputEncoding = Encoding.UTF8; start.StandardErrorEncoding = Encoding.UTF8; start.WorkingDirectory = root;
         var output = new StringBuilder(); var sync = new object();
         using (var child = new Process { StartInfo = start }) {
@@ -236,7 +303,9 @@ internal sealed class UpdateWindow : Form {
             child.WaitForExit(); lock (sync) File.WriteAllText(log, output.ToString(), Encoding.UTF8);
             backend = null;
             if (cancelled) throw new OperationCanceledException();
-            if (child.ExitCode != 0 && !(mode == "Check" && File.Exists(Path.Combine(work,"report.json")))) throw new IOException(T("Откройте журнал, чтобы узнать причину. Установленные файлы защищены проверкой и откатом.", "Open the log for details. Validation and rollback protect installed files."));
+            var report = File.Exists(reportPath) ? UpdateData.Parse(File.ReadAllText(reportPath, Encoding.UTF8)) : null;
+            if (UpdateData.IsComponentResult(mode, child.ExitCode, report)) return report;
+            throw new IOException(T("Откройте журнал, чтобы узнать причину. Установленные файлы защищены проверкой и откатом.", "Open the log for details. Validation and rollback protect installed files."));
         }
     }
     private void ReadProgress() {
@@ -262,13 +331,24 @@ internal sealed class UpdateWindow : Form {
         Process.Start(new ProcessStartInfo(Path.Combine(root, "mpv+.exe")) { WorkingDirectory = root, UseShellExecute = false });
     }
     private void InstallUpdates() {
-        if (busy) return; hint.Text = T("Личные настройки сохраняются.", "Your personal settings are preserved.");
+        if (busy) return; hint.ForeColor = muted; hint.Text = T("Личные настройки сохраняются.", "Your personal settings are preserved.");
         if (components && available > 0) {
             status.Text = T("Подготавливаем установку…", "Preparing installation…");
-            Run(delegate { try { ClosePlayer(); RunBackend("Update"); } finally { RestartPlayer(); } }, delegate {
-                available=0; install.Enabled=false;
-                foreach(DataGridViewRow row in rows.Rows) if(Convert.ToString(row.Cells[1].Value)==T("Есть обновление","Update available")) { row.Cells[1].Value=T("Обновлено","Updated"); row.Cells[1].Style.ForeColor=Color.FromArgb(142,206,168); }
-                status.Text=T("Компоненты обновлены","Components updated"); hint.Text=T("Проверка совместимости пройдена. Можно продолжать просмотр.","Compatibility checks passed. You can continue watching.");
+            Dictionary<string, object> report = null;
+            Run(delegate { try { ClosePlayer(); report = RunBackend("Update"); } finally { RestartPlayer(); } }, delegate {
+                ShowComponents(report);
+                string result = UpdateData.Text(report, "result");
+                if (result == "partial" || result == "skipped") {
+                    status.Text = T("Обновлено: ", "Updated: ") + UpdateData.Text(report, "updated")
+                        + T("  ·  Пропущено: ", "  ·  Skipped: ") + UpdateData.Text(report, "skipped");
+                    hint.Text = T("Причины пропуска указаны в таблице и журнале.", "See the table and update log for details.");
+                } else if (result == "unchanged") {
+                    status.Text = T("Все компоненты актуальны", "All components are up to date");
+                    hint.Text = "";
+                } else {
+                    status.Text = T("Компоненты обновлены", "Components updated");
+                    hint.Text = T("Проверка совместимости пройдена. Можно продолжать просмотр.", "Compatibility checks passed. You can continue watching.");
+                }
             }, true);
         } else if (!components && asset != null) {
             string installer = Path.Combine(work, "mpv+-Setup.exe");
@@ -299,7 +379,7 @@ internal sealed class UpdateWindow : Form {
 internal static class MpvUpdater {
     [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool SetProcessDPIAware();
     [STAThread] public static int Main(string[] args) {
-        Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false); SetProcessDPIAware();
+        SetProcessDPIAware(); Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
         string root = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "../..")); bool english = false, components = false; int pid = 0;
         for (int i = 0; i < args.Length; i++) {
             if (args[i] == "--root" && i + 1 < args.Length) root = args[++i];
