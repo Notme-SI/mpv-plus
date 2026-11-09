@@ -6,7 +6,7 @@ function M.escape(value)
 end
 function M.new()
     local overlay
-    local cache,count={},0
+    local cache,markers,count={},{},0
     local function width(value,size,font,bold)
         value=tostring(value or '')
         if value=='' then return 0 end
@@ -19,13 +19,24 @@ function M.new()
             overlay.compute_bounds=true;overlay.hidden=true
         end
         overlay.res_x=w;overlay.res_y=h
-        overlay.data=string.format('{\\rDefault\\an7\\pos(10,10)\\fn%s\\fs%.3f\\b%d\\fscx100\\fscy100\\bord0\\shad0\\q2}%s',font or 'Segoe UI',size,bold and 1 or 0,M.escape(value))
-        local ok,bounds=pcall(overlay.update,overlay)
-        local result=ok and type(bounds)=='table' and tonumber(bounds.x1)
-        if result and result>10 then result=result-10+2 else
+        local tags=string.format('{\\rDefault\\an7\\pos(10,10)\\fn%s\\fs%.3f\\b%d\\fscx100\\fscy100\\blur0\\bord0\\shad0\\q2}',font or 'Segoe UI',size,bold and 1 or 0)
+        local function endpoint(text)
+            overlay.data=tags..M.escape(text)
+            local ok,bounds=pcall(overlay.update,overlay)
+            return ok and type(bounds)=='table' and tonumber(bounds.x1)
+        end
+        -- libass bounds include transparent padding after the final glyph.
+        -- Give both measurements the same final glyph to cancel that padding;
+        -- x1 alone otherwise leaves a conspicuous empty tail on short pills.
+        local marker_key=table.concat({w,h,size,font or 'Segoe UI',bold and 1 or 0},'|')
+        local marker=markers[marker_key]
+        if not marker then marker=endpoint('|');markers[marker_key]=marker end
+        local last=marker and endpoint(value..'|')
+        local result=last and last-marker
+        if result and result>0 then result=result+2 else
             local _,n=value:gsub('[^\128-\191]','');result=n*size*.50
         end
-        if count>=256 then cache={};count=0 end
+        if count>=256 then cache,markers={},{};count=0 end
         count=count+1;cache[key]=result
         return result
     end

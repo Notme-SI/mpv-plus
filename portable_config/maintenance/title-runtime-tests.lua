@@ -167,6 +167,35 @@ return function(path)
         assert(requests[failed_title+2].args.args[#requests[failed_title+2].args.args]:find('/season/1?',1,true),'A failed series-title lookup must not block the season dictionary')
         respond(failed_title+2,{episodes={{episode_number=2,name='Puzzle'}}})
         assert(props['user-data/readable-title'].episodes['2']=='Puzzle','Sibling names remain available after a temporary series-title error')
+        events['end-file']()
+        -- Native Explorer can put its default movie title on a valid TV card.
+        -- Keep the exact launch ID even if all display names are placeholders.
+        local hls='https://fixture.invalid/proxy/opaque.m3u8'
+        local card={title='Фильм не найден',kind='tv',tmdb_id=73223,season=2,episode=3,original_title='Black Clover'}
+        os.getenv=function(k)
+            if k=='MPV_PLUS_LAMPA_CONTEXT' then return utils.format_json({version=1,source='lampa',entries={{url=hls,identity=card}}}) end
+            return getenv(k)
+        end
+        props.path=hls;props['media-title']='Фильм не найден';props.playlist={{filename=hls,title='Фильм не найден'}}
+        props['user-data/torrserver-context']={};props['user-data/interface-language']='ru'
+        dofile(path('scripts/readable_titles.lua'))
+        local at=#requests
+        events['file-loaded']();tick()
+        local title=props['user-data/readable-title']
+        assert(title.display_name=='Black Clover' and title.tmdb_id==73223 and title.artwork,'Original title and artwork identity survive the placeholder')
+        assert(requests[at+1].args.args[#requests[at+1].args.args]:find('/tv/73223?',1,true),'Resolve the exact card instead of searching the error text')
+        respond(at+1,{id=73223,name='Чёрный клевер'})
+        respond(at+2,{episodes={{episode_number=3,name='Испытание'}}})
+        title=props['user-data/readable-title']
+        assert(title.display_name=='Чёрный клевер' and title.artwork_id==73223 and title.subtitle=='Сезон 2, серия 3: Испытание','Resolve actual title and logo for the selected episode')
+        assert(not title.text:find('Фильм не найден',1,true),'Never publish the Explorer error as a title')
+        events['end-file']();card.original_title=nil
+        dofile(path('scripts/readable_titles.lua'));at=#requests
+        events['file-loaded']();tick()
+        assert(not props['user-data/readable-title'].text:find('Фильм не найден',1,true),'Missing alternative names do not restore the error')
+        assert(#requests==at+1 and requests[at+1].args.args[#requests[at+1].args.args]:find('/tv/73223?',1,true),'A trusted card ID works without a title')
+        requests[at+1].callback(false,{status=7,stdout=''})
+        assert(not props['user-data/readable-title'].text:find('Фильм не найден',1,true),'An offline lookup cannot republish the error')
     end,debug.traceback)
     mp,os.getenv=real,getenv;package.loaded['mp.options']=options
     assert(ok,err)

@@ -2,15 +2,16 @@ return function(path)
     local real,open=mp,io.open
     local globals={};for _,name in ipairs({'class','state','config','Elements','request_render'})do globals[name]=_G[name]end
     local packages={};for _,name in ipairs({'mpv-build/user_settings','mpv-build/ui_locale'})do packages[name]=package.loaded[name]end
+    local original_input=package.loaded['mp.input']
     local preload={};for name,value in pairs(package.preload)do preload[name]=value end
     local files={['script-opts/uosc.conf']='timeline_persistency=\ncontrols_persistency=\n'}
-    local props,observers,bindings,menus={},{},{},{}
+    local props,observers,bindings,menus,messages={},{},{},{},{}
     local function noop()end
     local mock={command_native=function(a)return path(a[2]:gsub('^~~/',''))end,
         observe_property=function(k,_,fn)observers[k]=fn end,
         set_property_native=function(k,v)props[k]=v;if observers[k]then observers[k](k,v)end end,
         get_property_native=function(k,d)if props[k]==nil then return d end;return props[k]end,
-        add_key_binding=function(_,k,fn)bindings[k]=fn end,register_script_message=noop,register_event=noop,osd_message=noop,
+        add_key_binding=function(_,k,fn)bindings[k]=fn end,register_script_message=function(k,fn)messages[k]=fn end,register_event=noop,osd_message=noop,
         commandv=function(a,b,c,data)if a=='script-message-to'and c=='open-menu'then menus[#menus+1]=require('mp.utils').parse_json(data)end end}
     local ok,err=xpcall(function()
         mp=mock
@@ -18,7 +19,8 @@ return function(path)
         package.loaded['mpv-build/user_settings']={path=function(name)return 'memory:'..name end,options=function(values,name)
             if name=='player_ui'then for key in pairs(values) do
                 local value=(files['script-opts/player_ui.conf']or''):match(key..'=([^\n]+)')
-                if value=='yes' or value=='no' then values[key]=value=='yes' end
+                if value=='yes' or value=='no' then values[key]=value=='yes'
+                elseif value then values[key]=value end
             end end
         end}
         io.open=function(name,mode)
@@ -32,6 +34,23 @@ return function(path)
         local element=setmetatable({id='controls',render_order=6,min_visibility=0,proximity=0},{__index=Element})
         dofile(path('scripts/player_ui.lua'));assert(element:get_visibility()==0,'Existing automatic hiding remains default')
         bindings.controls_menu();assert(menus[1].title=='Панель плеера'and menus[1].items[1].title=='Не скрывать нижнюю панель'and menus[1].items[1].hint=='ВЫКЛ')
+        assert(props['user-data/player-ui/skip-mark-color']=='#D8C39A','Existing preferences use CUB gold by default')
+        messages['skip-mark-color']('#19aBef')
+        assert(props['user-data/player-ui/skip-mark-color']=='#19ABEF'
+            and files['script-opts/player_ui.conf']:find('skip_mark_color=#19ABEF',1,true),'Custom RGB is normalized and saved')
+        messages['skip-mark-color']('bad color')
+        assert(props['user-data/player-ui/skip-mark-color']=='#19ABEF','Reject invalid colors')
+        dofile(path('scripts/player_ui.lua'))
+        assert(props['user-data/player-ui/skip-mark-color']=='#19ABEF','Restore the saved marker color')
+        local editor,warning,closed
+        package.loaded['mp.input']={get=function(options)editor=options end,log=function(text)warning=text end,
+            terminate=function()closed=true end}
+        messages['edit-skip-mark-color']()
+        assert(editor.default_text=='#19ABEF','Custom editor starts with the saved color')
+        editor.submit('#xyz')
+        assert(warning and not closed,'Invalid HEX keeps the editor open')
+        editor.submit(' d8c39a ')
+        assert(closed and props['user-data/player-ui/skip-mark-color']=='#D8C39A','Custom editor accepts HEX with optional hash')
         assert(not props['user-data/player-ui/buffer-visible'] and not props['user-data/player-ui/statistics-visible'],'Both loading overlays default to off')
         bindings.toggle_buffer();assert(props['user-data/player-ui/buffer-visible'] and not props['user-data/player-ui/statistics-visible'])
         bindings.toggle_statistics();assert(props['user-data/player-ui/buffer-visible'] and props['user-data/player-ui/statistics-visible'])
@@ -49,6 +68,7 @@ return function(path)
     mp=real;io.open=open
     for _,name in ipairs({'class','state','config','Elements','request_render'})do _G[name]=globals[name]end
     for _,name in ipairs({'mpv-build/user_settings','mpv-build/ui_locale'})do package.loaded[name]=packages[name]end
+    package.loaded['mp.input']=original_input
     for name in pairs(package.preload)do if preload[name]==nil then package.preload[name]=nil end end
     for name,value in pairs(preload)do package.preload[name]=value end
     assert(ok,err)

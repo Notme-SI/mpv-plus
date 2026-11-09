@@ -4,16 +4,41 @@ return function(script_directory)
     local ui=dofile(mp.command_native({'expand-path','~~/extensions/ui_locale.lua'}))
     local root=mp.command_native({'expand-path','~~/'})
     local glyphs=dofile(root..'/extensions/lucide_glyphs.lua')
-    local previous='menu,command:cloud:script-binding torrserver_loader/torr_open?TorrServer,playlist,space,speed:0.9,space,audio,subtitles,button:theintrodb,cycle:pin_off:ontop:no/yes=push_pin!?Поверх всех окон,fullscreen'
-    local preset=previous:gsub('cycle:pin_off:ontop:no/yes=push_pin!', 'cycle:window_normal:ontop:no/yes=window_on_top!')
+    local surface=dofile(root..'/extensions/glass_surface.lua')
+    local preset='menu,command:cloud:script-binding torrserver_loader/torr_open?TorrServer,playlist,space,speed:0.9,space,audio,subtitles,button:theintrodb,cycle:pin_off:ontop:no/yes=push_pin!?Поверх всех окон,fullscreen'
+    local previous=preset:gsub('cycle:pin_off:ontop:no/yes=push_pin!', 'cycle:window_normal:ontop:no/yes=window_on_top!')
     local legacy='play-pause?Пауза/Воспроизвести,menu,command:cloud:script-binding torrserver_loader/torr_open?TorrServer,subtitles,audio,button:theintrodb,space,speed:0.9,space,prev,playlist,next,toggle:push_pin:ontop?Поверх всех окон,fullscreen'
     local function player_layout() return options.controls==preset or options.controls==previous or options.controls==legacy end
     local function controls_height() return round((options.controls_size+2)*state.scale) end
+    package.preload['lib/utils']=function()
+        local original=assert(loadfile(script_directory..'/lib/utils.lua'))()
+        local format_key=keybind_to_human
+        local upper={}
+        local letters='АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ'
+        local i=0
+        for letter in ('абвгдеёжзийклмнопрстуфхцчшщъыьэюя'):gmatch('[\208\209][\128-\191]') do
+            upper[letter]=letters:sub(i+1,i+2)
+            i=i+2
+        end
+        function keybind_to_human(key)
+            return (format_key(key):upper():gsub('[\208\209][\128-\191]',upper))
+        end
+        return original
+    end
+    -- Weak aliases also cover older installations whose input.conf is preserved.
+    for _,alias in ipairs({{'Ctrl+з','Ctrl+p'},{'Alt+з','Alt+p'},{'Ctrl+е','Ctrl+t'},{'а','f'},{'С','C'}}) do
+        local translated,original=alias[1],alias[2]
+        mp.add_key_binding(translated,'layout-'..original,function() mp.commandv('keypress',original) end)
+    end
     package.preload['lib/ass']=function()
         local original=assert(loadfile(script_directory..'/lib/ass.lua'))()
         local methods=getmetatable(assdraw.ass_new())
         local icon=methods.icon
         function methods:icon(x,y,size,name,opts)
+            if name=='subtitles' then
+                opts=opts or {}
+                return surface.caption(self,x,y,size,opts.color or 'ffffff',opts.opacity or 1,opts.clip)
+            end
             if not glyphs[name] then return icon(self,x,y,size,name,opts) end
             opts=opts or {}
             opts.font,opts.size,opts.bold='lucide',size,false
@@ -258,12 +283,9 @@ return function(script_directory)
                 local hover=command and get_point_to_rectangle_proximity(cursor,box)<=0
                 if command then cursor:zone('primary_click',box,command) end
                 local opacity=not command and .35 or hover and 1 or .92
-                theme.panel(ass,box,opacity,r,hover,primary)
-                if primary then
-                    theme.transport(ass,cx,y,r,icon,opacity)
-                else
-                    ass:icon(cx,y,r*1.22,icon,{color='ffffff',opacity=opacity})
-                end
+                local background=r*.90
+                theme.panel(ass,{ax=cx-background,ay=y-background,bx=cx+background,by=y+background},opacity,background,hover,true)
+                theme.transport(ass,cx,y,r,icon,opacity)
             end
             if navigation then
                 button(x-step,radius*.7,'arrow_back_ios',state.playlist_pos>1 and function()mp.commandv('playlist-prev','weak')end)
@@ -281,7 +303,8 @@ return function(script_directory)
             if radius<=0 then return end
             local visibility=Elements.curtain.opacity>0 and .42 or .95
             local box={ax=x-radius,ay=y-radius,bx=x+radius,by=y+radius}
-            theme.panel(ass,box,visibility,radius,false)
+            local background=radius*.90
+            theme.panel(ass,{ax=x-background,ay=y-background,bx=x+background,by=y+background},visibility,background,false)
             ass:icon(x,y,radius*1.35,'loader',{color='ffffff',opacity=visibility,rotate=-(mp.get_time()*210)%360})
             request_render()
             return ass
@@ -407,7 +430,7 @@ return function(script_directory)
                     local a,b=segment.start,segment['end']
                     if segment.kind~='preview' and a and b and a>=0 and b>a and b<=state.duration+1 then
                         ass:rect(t2x(a),cy-r,t2x(math.min(b,state.duration)),cy+r,
-                            {color='B8DDF5',opacity=(theme.glass() and 0.95 or 0.8)*visibility,radius=r})
+                            {color=theme.mark_color,opacity=visibility,radius=r})
                         for _,time in ipairs({a,b}) do
                             local x=t2x(math.min(time,state.duration))
                             points[#points+1]=x
@@ -418,7 +441,7 @@ return function(script_directory)
                 local last
                 for _,x in ipairs(points) do
                     if not last or x-last>=6*s then
-                        ass:circle(x,cy,2.2*s,{color='ffffff',border=0.6*s,border_color='303030',opacity=visibility})
+                        ass:circle(x,cy,2.2*s,{color=theme.mark_color,border=0.6*s,border_color='303030',opacity=visibility})
                         last=x
                     end
                 end
@@ -477,8 +500,8 @@ return function(script_directory)
             local text=(round(state.speed*100)/100)..'×'
             local size=17*s*options.font_scale
             local cx,cy=(self.ax+self.bx)/2,(self.ay+self.by)/2
-            local width=math.max(76*s,text_width(text,{size=size})+22*s)
-            local height=math.min(30*s,self.by-self.ay)
+            local width=math.max(68*s,text_width(text,{size=size})+18*s)
+            local height=math.min(28*s,self.by-self.ay)
             local box={ax=cx-width/2,ay=cy-height/2,bx=cx+width/2,by=cy+height/2}
             cursor:zone('primary_down',box,function()
                 self:handle_cursor_down()
@@ -498,7 +521,7 @@ return function(script_directory)
                 ass:rect(x-0.5*s,cy+10*s-height,x+0.5*s,cy+10*s,{color='ffffff',opacity=(i==0 and 1 or 0.55)*opacity})
             end
             if hover and not self.dragging then
-                theme.tooltip(ass,box,ui.text('Скорость'),ui.language()=='en' and 'Scroll' or 'Колесо',opacity,grouped)
+                theme.tooltip(ass,box,ui.text('Скорость'),ui.language()=='en' and 'Scroll' or 'Скролл',opacity,grouped)
             end
             return ass
         end

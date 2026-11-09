@@ -97,7 +97,7 @@ function M.reconcile(independent,card,context)
     -- Uncertain coordinates from a guessed generic title are replaced only by
     -- the exact launched card, after the real torrent file has been checked.
     for _,key in ipairs({'title','original_title','aliases','year','kind','tmdb_id','imdb_id','mal_id','shikimori_id','anime'}) do
-        if card[key]~=nil then result[key]=card[key] end
+        if card[key]~=nil and (key~='title' or card[key]~='') then result[key]=card[key] end
     end
     if not specific and not explicit or own.unresolved_context then
         for _,key in ipairs({'season','episode','tmdb_season','tmdb_episode','tmdb_offset'}) do result[key]=card[key] or own[key] end
@@ -116,16 +116,23 @@ local function url(value)
 end
 local function sanitize(value)
     if type(value)~='table' then return end
-    local title=text(value.title)
-    if not title or title=='' then return end
-    local result={title=title,original_title=text(value.original_title),episode_title=text(value.episode_title),
+    local title=fmt.clean_title(text(value.title)) or fmt.clean_title(text(value.name))
+        or fmt.clean_title(text(value.original_title)) or fmt.clean_title(text(value.original_name))
+    if not title then
+        for _,alias in ipairs(type(value.aliases)=='table' and value.aliases or {}) do
+            title=fmt.clean_title(text(alias))
+            if title then break end
+        end
+    end
+    if not title and not number(value.tmdb_id) then return end
+    local result={title=title or '',original_title=fmt.clean_title(text(value.original_title)),episode_title=text(value.episode_title),
         kind=value.kind=='tv' and 'tv' or 'movie',year=number(value.year,1870,2200),
         tmdb_id=number(value.tmdb_id),mal_id=number(value.mal_id),shikimori_id=number(value.shikimori_id),
         season=number(value.season,0,999),episode=number(value.episode,1,9999),anime=value.anime==true,aliases={}}
     if type(value.imdb_id)=='string' and value.imdb_id:match('^tt%d+$') then result.imdb_id=value.imdb_id end
     for i,alias in ipairs(type(value.aliases)=='table' and value.aliases or {}) do
         if i>12 then break end
-        if text(alias) then result.aliases[#result.aliases+1]=text(alias) end
+        if fmt.clean_title(text(alias)) then result.aliases[#result.aliases+1]=fmt.clean_title(text(alias)) end
     end
     return result
 end

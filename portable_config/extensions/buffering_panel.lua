@@ -97,12 +97,12 @@ function M.new(ui)
         end
         if data.show_buffer~=false then
             local download=transfer or read or rate(0)
-            local label=reserve and ((en and 'Buffered ' or 'В буфере ')..reserve..' · '..download) or download
+            local label=download
             local width=math.min(w-16*scale,metrics.width(label,15*scale,font)+34*scale)
             local y=h/2+32*scale
             local x=(w-width)/2
             box(x,y,width,26*scale,13*scale)
-            icon('download',x+12*scale,y+13*scale,15)
+            icon('arrow_down_to_line',x+12*scale,y+13*scale,15)
             text(metrics.fit(label,width-30*scale,15*scale,font),x+23*scale,y+4*scale,15,width-30*scale)
         end
         overlay.res_x=w;overlay.res_y=h;overlay.data=ass.text;overlay:update()

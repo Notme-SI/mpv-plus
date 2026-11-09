@@ -162,7 +162,7 @@ function M.menu(data)
             if binding=='theintrodb/theintrodb-toggle-ui' or node.title==M.text('Пропуск заставок')
                 or node.items and has(node,'theintrodb/theintrodb-toggle-ui') then
                 node.title=M.text('Заставки и титры')
-                node.hint=node.hint or 'Ctrl+I'
+                node.hint=node.hint or 'CTRL+I'
                 node.value={'script-binding','theintrodb/theintrodb-toggle-ui'}
                 node.items=nil
             end

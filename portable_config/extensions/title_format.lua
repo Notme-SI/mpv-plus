@@ -93,7 +93,7 @@ function M.parse(raw)
             break
         end
     end
-    out.title=trim(s):gsub('%s*/%s*$','')
+    out.title=M.clean_title(trim(s):gsub('%s*/%s*$','')) or ''
     out.episode_title=out.episode_title and trim(out.episode_title) or nil
     if out.episode_title=='' then out.episode_title=nil end
     if out.episode_title and out.episode_title:lower():match('^rhs%s*%d*[kK]?$') then out.episode_title=nil end
@@ -130,6 +130,14 @@ function M.normalize(s)
     s=(s or ''):lower()
     for i,c in ipairs(upper) do s=s:gsub(c,lower[i]) end
     return s:gsub('[%s%p]','')
+end
+function M.clean_title(value)
+    if type(value)~='string' or trim(value)=='' then return nil end
+    local key=M.normalize(value)
+    -- Lampa Explorer inserts this default into TV cards that have name but no
+    -- title. It describes missing metadata, never the identity of the stream.
+    if key==M.normalize('Фильм не найден') or key=='movienotfound' or key=='filmnotfound' then return nil end
+    return trim(value)
 end
 function M.animation_candidates(results)
     local matches={}

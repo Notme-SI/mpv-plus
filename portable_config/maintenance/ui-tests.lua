@@ -75,14 +75,15 @@ return function(path)
             forward_bytes=8*1048576,media=rich,hwdec='no',dropped=0,bitrate=42000000}
         panel.draw(sample)
         assert(not overlay.data:find('46%',1,true) and not overlay.data:find('100%',1,true),'Buffer limit is not a progress target')
-        assert(overlay.data:find('В буфере 23 с',1,true) and overlay.data:find('Чтение mpv+: 16.8 Мбит/с',1,true))
+        assert(not overlay.data:find('В буфере ',1,true) and overlay.data:find('Чтение mpv+: 16.8 Мбит/с',1,true))
         assert(overlay.data:find('Перемотка',1,true) and overlay.data:find('Средний битрейт файла: 42.0 Мбит/с',1,true))
         assert(overlay.data:find('Программный декодер',1,true) and not overlay.data:find('AAC',1,true))
         sample.torrent=true;sample.stat={download_speed=1025000,buffer={seconds=23,target=50}}
         panel.draw(sample)
         assert(overlay.data:find('Загрузка торрента: 8.2 Мбит/с',1,true),'Torrent speed is separate from player throughput')
-        assert(overlay.data:find('В буфере 23 с · 8.2 Мбит/с',1,true) and not overlay.data:find('TorrServer',1,true),
-            'The compact pill includes torrent speed without the server name')
+        assert(overlay.data:match('}8%.2 Мбит/с%s*$') and not overlay.data:find('TorrServer',1,true),
+            'The compact pill shows only torrent speed even with a nonempty buffer')
+        assert(overlay.data:find(dofile(path('extensions/lucide_glyphs.lua')).arrow_down_to_line,1,true),'The compact pill uses Lucide arrow-down-to-line')
         sample.seconds=0;sample.forward_bytes=0
         sample.stat.buffer={seconds=90,target=94};sample.stat.filled=100*1048576;sample.stat.capacity=100*1048576
         panel.draw(sample)
@@ -92,7 +93,7 @@ return function(path)
             'The compact pill shows only the measured speed while the player buffer is empty')
         assert(not overlay.data:find('\\1c&HD0D0D0',1,true),'All statistics text uses the same foreground')
         sample.seconds=22.9;panel.draw(sample)
-        assert(overlay.data:find('В буфере 23 с',1,true) and not overlay.data:find('≈',1,true),'Display whole seconds without an approximation symbol')
+        assert(not overlay.data:find('В буфере ',1,true) and overlay.data:match('}8%.2 Мбит/с%s*$'),'Seconds never enter the loading speed pill')
         sample.torrent=false;sample.stat=nil
 
         for _,size in ipairs({{640,360},{1920,1080},{3840,2160}})do

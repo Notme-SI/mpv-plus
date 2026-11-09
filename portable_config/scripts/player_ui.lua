@@ -4,21 +4,29 @@ ui.install_messages()
 local utils = require 'mp.utils'
 local config_path = dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua').path('script-opts/uosc.conf')
 local style, cache = 'bar', true
-local prefs={icon_style='glass',chapter_marks=true,controls_always=false,buffer_visible=false,statistics_visible=false}
+local default_mark_color='#D8C39A'
+local prefs={icon_style='glass',chapter_marks=true,skip_mark_color=default_mark_color,controls_always=false,buffer_visible=false,statistics_visible=false}
+local function mark_color(value)
+    local rgb=type(value)=='string' and value:match('^%s*#?(%x%x%x%x%x%x)%s*$')
+    return rgb and '#'..rgb:upper() or nil
+end
 dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua').options(prefs,'player_ui')
 if prefs.icon_style~='plain' then prefs.icon_style='glass' end
+prefs.skip_mark_color=mark_color(prefs.skip_mark_color) or default_mark_color
 local prefs_path=dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua').path('script-opts/player_ui.conf')
 local function save_prefs()
     local f=io.open(prefs_path,'wb')
     if not f then mp.osd_message('Не удалось сохранить оформление',3);return end
-    local ok=f:write('icon_style='..prefs.icon_style..'\nchapter_marks='..(prefs.chapter_marks and 'yes' or 'no')..'\ncontrols_always='..(prefs.controls_always and 'yes' or 'no')..'\nbuffer_visible='..(prefs.buffer_visible and 'yes' or 'no')..'\nstatistics_visible='..(prefs.statistics_visible and 'yes' or 'no')..'\n')
+    local ok=f:write('icon_style='..prefs.icon_style..'\nchapter_marks='..(prefs.chapter_marks and 'yes' or 'no')
+        ..'\nskip_mark_color='..prefs.skip_mark_color..'\ncontrols_always='..(prefs.controls_always and 'yes' or 'no')
+        ..'\nbuffer_visible='..(prefs.buffer_visible and 'yes' or 'no')..'\nstatistics_visible='..(prefs.statistics_visible and 'yes' or 'no')..'\n')
     if not f:close() or not ok then mp.osd_message('Не удалось сохранить оформление',3) end
 end
 local function icons_menu()
     return {type='player-icons',title='Значки',keep_open=true,items={
-        {title='Стекло',hint='Светлое и прозрачное',active=prefs.icon_style=='glass',
+        {title='Светлые',hint='Светлое и прозрачное',active=prefs.icon_style=='glass',
             value={'script-message-to','player_ui','icon-style','glass'}},
-        {title='Обычные',hint='Тёмное оформление',active=prefs.icon_style=='plain',
+        {title='Тёмные',hint='Тёмное и прозрачное',active=prefs.icon_style=='plain',
             value={'script-message-to','player_ui','icon-style','plain'}},
     },footnote='Меняет кнопки, блок названия и оформление полос.'}
 end
@@ -35,6 +43,12 @@ cache = (text:match('\ntimeline_cache%s*=%s*(%w+)') or 'yes') ~= 'no'
 if style ~= 'bar' then style = 'line' end
 
 local function menu_data()
+    local colors={}
+    for _,item in ipairs({{'Золото CUB',default_mark_color},{'Белый','#FFFFFF'},{'Голубой','#8ED1FF'},{'Зелёный','#8ECEA8'}}) do
+        colors[#colors+1]={title=item[1],hint=item[2],active=prefs.skip_mark_color==item[2],
+            value={'script-message-to','player_ui','skip-mark-color',item[2]}}
+    end
+    colors[#colors+1]={title='Свой цвет HEX',icon='edit',value={'script-message-to','player_ui','edit-skip-mark-color'}}
     return {
         type = 'player-timeline-style',
         title = 'Полоса перемотки',
@@ -52,6 +66,7 @@ local function menu_data()
             {title='Метки пропуска',hint=prefs.chapter_marks and 'ВКЛ' or 'ВЫКЛ',
              icon=prefs.chapter_marks and 'toggle_on' or 'toggle_off',
              value={'script-binding','player_ui/toggle_marks'}},
+            {title='Цвет меток пропуска',hint=prefs.skip_mark_color,items=colors},
         },
         footnote='Индикация загрузки видна, когда источник сообщает диапазоны буфера.',
     }
@@ -71,6 +86,7 @@ local function publish()
     mp.set_property_native('user-data/player-ui/timeline-cache', cache)
     mp.set_property_native('user-data/player-ui/icon-style',prefs.icon_style)
     mp.set_property_native('user-data/player-ui/chapter-marks',prefs.chapter_marks)
+    mp.set_property_native('user-data/player-ui/skip-mark-color',prefs.skip_mark_color)
     mp.set_property_native('user-data/player-ui/controls-always',prefs.controls_always)
     mp.set_property_native('user-data/player-ui/buffer-visible',prefs.buffer_visible)
     mp.set_property_native('user-data/player-ui/statistics-visible',prefs.statistics_visible)
@@ -108,8 +124,31 @@ mp.add_key_binding(nil, 'toggle_cache', function()
     cache = not cache
     apply('timeline_cache', cache and 'yes' or 'no')
 end)
-mp.add_key_binding(nil, 'timeline_menu', function()
+local function open_timeline_menu()
     mp.commandv('script-message-to', 'uosc', 'open-menu', utils.format_json(menu_data()))
+end
+mp.add_key_binding(nil, 'timeline_menu', open_timeline_menu)
+local function set_mark_color(color)
+    prefs.skip_mark_color=color
+    save_prefs()
+    publish()
+    mp.commandv('script-message-to','uosc','flash-elements','timeline')
+end
+mp.register_script_message('skip-mark-color',function(value)
+    local color=mark_color(value)
+    if color then set_mark_color(color) end
+end)
+mp.register_script_message('edit-skip-mark-color',function()
+    local input=require 'mp.input'
+    mp.commandv('script-message-to','uosc','close-menu')
+    input.get({prompt=ui.text('Цвет меток пропуска')..' (#RRGGBB)',default_text=prefs.skip_mark_color,keep_open=true,
+        submit=function(text)
+            local color=mark_color(text)
+            if not color then input.log(ui.text('Введите цвет в формате #RRGGBB.'));return end
+            set_mark_color(color)
+            input.terminate()
+        end,
+        closed=function() mp.add_timeout(.05,open_timeline_menu) end})
 end)
 mp.add_key_binding(nil,'icons_menu',function()
     mp.commandv('script-message-to','uosc','open-menu',utils.format_json(icons_menu()))

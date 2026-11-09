@@ -24,6 +24,7 @@ return {
     speed = '', -- gauge
     local_movies = '', -- film
     download = '', -- download
+    arrow_down_to_line = '', -- arrow-down-to-line
     loader = '', -- loader-circle
     close = '', -- x
     remove = '', -- minus
@@ -35,6 +36,7 @@ return {
     more_horiz = '', -- ellipsis
     more_vert = '', -- ellipsis-vertical
     skip_next = '', -- skip-forward
+    timer = '', -- timer
     fast_forward = '', -- fast-forward
     chevron_right = '', -- chevron-right
     chevron_left = '', -- chevron-left

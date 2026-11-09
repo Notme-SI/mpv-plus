@@ -380,20 +380,20 @@
     "ru": "Не удалось сохранить язык интерфейса"
   },
   {
-    "en": "Glass",
-    "ru": "Стекло"
+    "en": "Light",
+    "ru": "Светлые"
   },
   {
     "en": "Light and transparent",
     "ru": "Светлое и прозрачное"
   },
   {
-    "en": "Classic",
-    "ru": "Обычные"
+    "en": "Dark",
+    "ru": "Тёмные"
   },
   {
-    "en": "Dark appearance",
-    "ru": "Тёмное оформление"
+    "en": "Dark and transparent",
+    "ru": "Тёмное и прозрачное"
   },
   {
     "en": "Changes buttons, title cards and sliders.",
@@ -422,6 +422,34 @@
   {
     "en": "Skip markers",
     "ru": "Метки пропуска"
+  },
+  {
+    "en": "Skip marker color",
+    "ru": "Цвет меток пропуска"
+  },
+  {
+    "en": "CUB gold",
+    "ru": "Золото CUB"
+  },
+  {
+    "en": "White",
+    "ru": "Белый"
+  },
+  {
+    "en": "Light blue",
+    "ru": "Голубой"
+  },
+  {
+    "en": "Green",
+    "ru": "Зелёный"
+  },
+  {
+    "en": "Custom HEX color",
+    "ru": "Свой цвет HEX"
+  },
+  {
+    "en": "Enter a color in #RRGGBB format.",
+    "ru": "Введите цвет в формате #RRGGBB."
   },
   {
     "en": "ON",

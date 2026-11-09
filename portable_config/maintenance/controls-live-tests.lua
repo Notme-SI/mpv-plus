@@ -54,6 +54,7 @@ local function check()
                 Elements.controls:update_dimensions()
             end
             assert(Elements.timeline:get_visibility()==1 and Elements.timeline:render(),'Active seek rail stays rendered')
+            assert(keybind_to_human('Alt+p')=='ALT+P' and keybind_to_human('Ctrl+з')=='CTRL+З','Shortcut labels use uppercase')
             state.time_human='00:26:53';state.destination_time_human='-01:58:07'
             local rail=Elements.timeline:render().text
             assert(rail:find('26:53',1,true) and rail:find('1:58:07',1,true)
@@ -90,7 +91,8 @@ local function check()
             local ok_center,result=pcall(indicator.render,indicator)
             cursor.zone=zone
             assert(ok_center and result and result.text:find('\\1c&H161616&',1,true) and #clicks==3,'Paused video has three clickable transport controls')
-            assert(result.text:find(glyphs.arrow_back_ios,1,true) and result.text:find(glyphs.arrow_forward_ios,1,true),'Episode arrows are rendered in the center')
+            local _,discs=result.text:gsub('\\1c&Hf4f4f4&','')
+            assert(discs==3,'Previous, next and play use the same light disc and dark symbol')
             mp.set_property_bool('pause',true);clicks[3]()
             assert(not mp.get_property_bool('pause'),'Clicking the center control resumes playback')
             state.pause=false;state.is_video=false
@@ -123,7 +125,7 @@ local function check()
                     assert(panel:get_visibility()==1 and timeline:get_visibility()==1,'Flashing the timeline reveals the entire row')
                     timeline.forced_visibility=nil
                     local top=panel.controls[10].element
-                    assert(top.icon=='window_normal','The default layout replaces the pin')
+                    assert(top.icon=='pin_off','The default layout uses the pin when always-on-top is off')
                 else
                     assert(Elements.controls:get_visibility()==-1,'A custom layout retains native timeline hover behavior')
                 end

@@ -62,9 +62,10 @@ local function get(endpoint,callback)
     requests[id]=true
 end
 local function publish(data,title,episode_title,episodes)
+    title=fmt.clean_title(title)
     episode_title=episode_title or display_details.episode_title
     local text=fmt.label(data,language,title,episode_title)
-    if text=='' then text=mp.get_property('media-title','') end
+    if text=='' then text=fmt.clean_title(mp.get_property('media-title','')) or (language=='ru' and 'Видео' or 'Video') end
     if title then display_details.title=title end
     if episode_title then display_details.episode_title=episode_title end
     if episodes then display_details.episodes=episodes end
@@ -115,10 +116,10 @@ local function refresh()
     publish(data,data.source=='lampa' and data.title or nil,data.episode_title)
     if data.unresolved_context then return end
     -- Even a named launch entry needs the season dictionary for its siblings.
-    if data.source=='lampa' and data.kind=='movie' then return end
+    if data.source=='lampa' and data.kind=='movie' and data.title~='' then return end
     local fallback_title=local_title(data,lang)
     if fallback_title then publish(data,fallback_title) end
-    if not opts.online or data.title=='' or not token or token=='' then return end
+    if not opts.online or data.title=='' and not data.tmdb_id or not token or token=='' then return end
     local locale=lang
     local function anime_fallback()
         if not data.mal_id then return end

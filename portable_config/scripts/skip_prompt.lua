@@ -1,8 +1,10 @@
 -- A transient, clickable skip suggestion above the lower player controls.
 local ui=dofile(mp.command_native({'expand-path','~~/extensions/ui_locale.lua'}))
-local utils=require 'mp.utils'
 local assdraw=require 'mp.assdraw'
 local panel_style=dofile(mp.command_native({'expand-path','~~/extensions/overlay_style.lua'}))
+local measure=dofile(mp.command_native({'expand-path','~~/extensions/text_metrics.lua'}))
+local glyphs=dofile(mp.command_native({'expand-path','~~/extensions/lucide_glyphs.lua'}))
+local metrics=measure.new()
 local overlay=mp.create_osd_overlay('ass-events')
 overlay.z=1001
 local cue,notice,box,hover,bound=nil,nil,nil,false,false
@@ -33,21 +35,33 @@ draw=function()
         return
     end
     local scale=math.max(0.65,math.min(2,h/720))
-    local widths=ui.language()=='en' and {intro=165,recap=180,credits=195} or {intro=280,recap=360,credits=245}
     local ass=assdraw.ass_new()
     local function render(data,y,clickable)
-        local text=segments.caption(data,data.auto or data.notice,ui.language())
-        local _,glyphs=text:gsub('[^\128-\191]','')
-        local bw=math.min(math.max(widths[data.kind],glyphs*13+32)*scale,w-20*scale)
-        local x1=w-25*scale
-        local area={x0=x1-bw,y0=y-40*scale,x1=x1,y1=y}
+        local auto=data.auto or data.notice
+        local text=segments.caption(data,auto,ui.language())
+        local size,height=18*scale,28*scale
+        local font='Segoe UI Semibold'
+        local padding,icon_size,gap=7*scale,17*scale,5*scale
+        local inset=2*padding+icon_size+gap
+        local x1=w-16*scale
+        local max_width=x1-8*scale
+        if max_width<=inset then return end
+        text=metrics.fit(text,max_width-inset,size,font)
+        local bw=math.min(max_width,metrics.width(text,size,font)+inset)
+        local area={x0=x1-bw,y0=y-height,x1=x1,y1=y}
         local mouse=mp.get_property_native('mouse-pos',{})
         local over=clickable and mouse.hover~=false and mouse.x and mouse.y and mouse.x>=area.x0 and mouse.x<=area.x1 and mouse.y>=area.y0 and mouse.y<=area.y1
-        if clickable then box=area;hover=over end
-        panel_style.panel(ass,area,scale,mp.get_property_native('user-data/player-ui/icon-style','glass'),over,8*scale)
+        box=area
+        if clickable then hover=over end
+        panel_style.panel(ass,area,scale,mp.get_property_native('user-data/player-ui/icon-style','glass'),over,height/2)
+        local center_y=y-height/2
+        local icon=glyphs[data.notice and 'check' or auto and 'timer' or 'skip_next']
         ass:new_event()
-        ass:append(string.format('{\\an5\\pos(%.1f,%.1f)\\fnSegoe UI Semibold\\fs%.1f\\1c&HFFFFFF&\\1a&H00&\\3c&H000000&\\3a&H90&\\4c&H000000&\\4a&H80&\\bord0\\shad0\\blur0}%s',
-            (area.x0+area.x1)/2,(area.y0+area.y1)/2,25*scale,text))
+        ass:append(string.format('{\\rDefault\\an5\\pos(%.1f,%.1f)\\fnlucide\\fs%.1f\\1c&HFFFFFF&\\bord0\\shad0}%s',
+            area.x0+padding+icon_size/2,center_y,icon_size,icon))
+        ass:new_event()
+        ass:append(string.format('{\\rDefault\\an4\\pos(%.1f,%.1f)\\fn%s\\fs%.1f\\1c&HFFFFFF&\\bord0\\shad0\\q2}%s',
+            area.x0+padding+icon_size+gap,center_y,font,size,measure.escape(text)))
     end
     box=nil;hover=false
     -- Only one panel. Joined segments arrive as one action and one notice.

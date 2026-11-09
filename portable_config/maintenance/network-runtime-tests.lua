@@ -50,13 +50,13 @@ return function(path)
         props['demuxer-cache-duration']=0
         props['demuxer-cache-state']={['ts-per-stream']={{type='video',['cache-duration']=6.8}}}
         observers['demuxer-cache-state']()
-        assert(overlay.data:find('В буфере 7 с',1,true) and #requests==2,'Fresh video cache telemetry redraws without a server request')
+        assert(overlay.data:find('Буфер плеера: 7 с',1,true) and #requests==2,'Fresh video cache telemetry redraws statistics without a server request')
         props['user-data/player-ui/buffer-visible']=false;observers['user-data/player-ui/buffer-visible']()
         assert(overlay.visible and not overlay.data:find('В буфере ',1,true) and overlay.data:find('Ожидание данных',1,true),'Hide buffer independently')
         props['user-data/player-ui/statistics-visible']=false;observers['user-data/player-ui/statistics-visible']()
         assert(not overlay.visible,'Both switches off remove the overlay immediately')
         props['user-data/player-ui/buffer-visible']=true;observers['user-data/player-ui/buffer-visible']()
-        assert(overlay.visible and overlay.data:find('В буфере ',1,true) and not overlay.data:find('Ожидание данных',1,true),'Buffer-only overlay')
+        assert(overlay.visible and overlay.data:match('}16%.8 Мбит/с%s*$') and not overlay.data:find('Ожидание данных',1,true),'Speed-only overlay')
         props['user-data/player-ui/statistics-visible']=true;observers['user-data/player-ui/statistics-visible']()
         props['paused-for-cache']=false;observers['paused-for-cache']();assert(not overlay.visible)
         for i=1,4 do
