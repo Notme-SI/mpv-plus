@@ -157,10 +157,10 @@
       "releaseTag": "2026-11-08-8bc468896e"
     }
   ],
-  "buildVersion": "1.2.3",
+  "buildVersion": "1.2.4",
   "extensionLayout": 2,
   "localFiles": {
-    "extensions/lampa_context.lua": "b18514dfe1140d3093356bb7f539178cf7aa1386957cc44d4b28f507696e1ae1",
+    "extensions/lampa_context.lua": "e37d640c93b222d48604951c0eef7a65eadbf523f136b2706d593313ad2bd9fb",
     "extensions/uosc_theme.lua": "79ed40dfddf2696f9ad8c42e0f16c2870a036aa33983e3bdf35aac20c6dc83e3",
     "extensions/glass_surface.lua": "ac8c4460d23899ab172dc61b4fccd59eb0277b456905aa8a727be7a39d765ace",
     "extensions/uosc_skin.lua": "4be78a8fd52673998bfdb4c55f64319f07c1b367d557787a7742bdbd3ee432b6",
@@ -193,7 +193,7 @@
     "maintenance/compatibility.lua": "0660ac236be32c61fb6ac352993efe5511618d12ee4abc9adeffbce7f3c14c37",
     "maintenance/theintrodb-api-tests.lua": "30372ee0466517ebc6f50a6998b7d5097494cfa3707ffd42004b53c4ed5238b1",
     "scripts/component_updates.lua": "d6cfd587a35628b9834dfe18fe48a2397e3b9481ff4395c2bcfd61dc2d0987a5",
-    "scripts/player_maintenance.lua": "11146fa68579d875317b5d48a811bc247675fd9048e0be7ac3ecec276ca92e62",
+    "scripts/player_maintenance.lua": "37402808125d9130b5adb064ddeb6dd8d7a4eb742f66a473968dfab74e414dcb",
     "maintenance/update-runtime-tests.lua": "9b7cfdc11ef65c28ad07e701bdf428181906d68248f26fd7b088330016d96175",
     "maintenance/Update-Components.ps1": "92c50e7c8824e09f3f6000118e418927360528cfd84c5c612073fdf902c83cd4",
     "extensions/lucide_glyphs.lua": "22ae16e78115dc9850c9b842ea7bde94dd4ee9ccd2047d928bd8dc0f69a6f5e5",

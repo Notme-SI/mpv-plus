@@ -75,7 +75,6 @@ function M.reconcile(independent,card,context)
     if own.tmdb_id and card.tmdb_id and tonumber(own.tmdb_id)~=tonumber(card.tmdb_id) then return keep('conflict-id') end
     if own.kind~=card.kind and (specific or explicit or known_title) then return keep('conflict-kind') end
     if own.mal_id and card.mal_id and tonumber(own.mal_id)~=tonumber(card.mal_id) then return keep('conflict-arc') end
-    if known_title and own.year and card.year and not own.anime and math.abs(own.year-card.year)>1 then return keep('conflict-year') end
     if (specific or explicit) and own.tmdb_season~=nil and card.tmdb_season~=nil
         and own.tmdb_season~=card.tmdb_season then return keep('conflict-season') end
     local physical_episode=parsed.episode or episode_name and tonumber((physical:match('[^/\\]+$') or physical):match('^(%d+)'))
@@ -92,6 +91,16 @@ function M.reconcile(independent,card,context)
             if fmt.normalize(fmt.parse(name).title)==fmt.normalize(own.source_confirmed and own.title or parsed.title) then matched=true;break end
         end
         if not matched then return keep('conflict-title') end
+    end
+    if known_title and own.year and card.year and not own.anime and math.abs(own.year-card.year)>1 then
+        -- A later season can carry its release year instead of the series'
+        -- premiere year. Accept the scoped card only after title/ID checks and
+        -- an explicit filename matching that card's season and episode.
+        local season_release=own.kind=='tv' and number(card.tmdb_id) and explicit
+            and parsed.season>1 and parsed.episode~=nil
+            and parsed.season==card.tmdb_season and parsed.episode==card.tmdb_episode
+            and tonumber(own.year)>tonumber(card.year)
+        if not season_release then return keep('conflict-year') end
     end
     local result=copy(own)
     -- Uncertain coordinates from a guessed generic title are replaced only by

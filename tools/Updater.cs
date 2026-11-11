@@ -14,7 +14,7 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 [assembly: AssemblyTitle("mpv+ Updates")]
-[assembly: AssemblyVersion("1.2.3.0")]
+[assembly: AssemblyVersion("1.2.4.0")]
 
 internal static class UpdateData {
     internal static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = 4194304 };

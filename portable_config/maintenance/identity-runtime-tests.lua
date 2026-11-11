@@ -78,6 +78,40 @@ return function(path)
         local duration_request
         for _,r in ipairs(requests)do if r.url:find('api.theintrodb.org/',1,true) then duration_request=r end end
         assert(duration_request and duration_request.url:find('duration_ms=1440000',1,true),'Late duration refreshes skip matching for the first opened file')
+        local original_playlist=props.playlist
+        for _,release in ipairs({
+            {hash='58b715fb795bcc857e5ac61e89a0c1f148b75fd3',
+                folder='Dark.Matter.2026.S02.2160p.ATVP.WEB-DL.HDR.H265.Master5',
+                file='Dark.Matter.2026.S02E01.2160p.HDR.Master5.mkv'},
+            {hash='709320974a569ce8f7f781b30308df820e8ea8d7',
+                folder='Dark.Matter.S02.ATVP.DV.HDR.WEB-DL.2160p.by.AKTEP',
+                file='Dark.Matter.S02E01.A.Quiet.Life.ATVP.DV.HDR.WEB-DL.2160p.by.AKTEP.mkv'},
+        }) do
+            local stream='http://localhost/stream?link='..release.hash..'&index=1&play'
+            props.path=stream;props.playlist={{filename=stream,title=release.file}}
+            props['user-data/torrserver-context']={media=stream,path=release.folder..'/'..release.file,title=release.folder}
+            os.getenv=function(key)
+                if key=='MPV_PLUS_LAMPA_CONTEXT' then return utils.format_json({version=1,source='lampa',entries={{url=stream,identity={
+                    title='Тёмная материя',original_title='Dark Matter',kind='tv',year=2024,tmdb_id=196322,season=2,episode=1,
+                }}}}) end
+                return getenv(key)
+            end
+            dofile(path('scripts/theintrodb.lua'))
+            local skip_state=__tidb_debug()
+            requests={};events['file-loaded']()
+            local skip_request
+            for _,request in ipairs(requests) do
+                assert(not request.url:find('/search/tv',1,true),'TheIntroDB must use the confirmed card ID for '..release.file)
+                if request.url:find('api.theintrodb.org/v4/media?',1,true) then skip_request=request end
+            end
+            assert(skip_state.tmdb_id=='196322' and skip_state.season=='2' and skip_state.episode=='1','TheIntroDB keeps the selected series coordinates')
+            assert(skip_request and skip_request.url:find('tmdb_id=196322&season=2&episode=1&duration_ms=1440000',1,true),'Request skip times for the actual series and episode')
+            skip_request.callback(true,{status=0,stdout='{"intro":[{"start_ms":1000,"end_ms":75000}]}\n200'})
+            assert(skip_state.loaded and #skip_state.segments==1 and skip_state.segments[1]['end']==75,
+                'Validated skip times become available for '..release.file)
+        end
+        props.path=media;props.playlist=original_playlist
+        os.getenv=function(key) if key~='MPV_PLUS_LAMPA_CONTEXT' then return getenv(key) end end
         package.path=path('scripts/autochapters/?.lua')..';'..package.path
         package.loaded.encoding=nil;package.loaded.database={new=function() return {request=noop} end}
         requests={};dofile(path('scripts/autochapters/main.lua'))

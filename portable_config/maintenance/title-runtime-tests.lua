@@ -196,6 +196,40 @@ return function(path)
         assert(#requests==at+1 and requests[at+1].args.args[#requests[at+1].args.args]:find('/tv/73223?',1,true),'A trusted card ID works without a title')
         requests[at+1].callback(false,{status=7,stdout=''})
         assert(not props['user-data/readable-title'].text:find('Фильм не найден',1,true),'An offline lookup cannot republish the error')
+        for _,release in ipairs({
+            {hash='58b715fb795bcc857e5ac61e89a0c1f148b75fd3',
+                folder='Dark.Matter.2026.S02.2160p.ATVP.WEB-DL.HDR.H265.Master5',
+                file='Dark.Matter.2026.S02E01.2160p.HDR.Master5.mkv'},
+            {hash='709320974a569ce8f7f781b30308df820e8ea8d7',
+                folder='Dark.Matter.S02.ATVP.DV.HDR.WEB-DL.2160p.by.AKTEP',
+                file='Dark.Matter.S02E01.A.Quiet.Life.ATVP.DV.HDR.WEB-DL.2160p.by.AKTEP.mkv'},
+        }) do
+            events['end-file']()
+            local stream='http://localhost/stream?link='..release.hash..'&index=1&play'
+            props.path=stream;props['media-title']=release.file
+            props.playlist={{filename=stream,title=release.file}}
+            props['user-data/torrserver-context']={media=stream,path=release.folder..'/'..release.file,title=release.folder}
+            os.getenv=function(key)
+                if key=='MPV_PLUS_LAMPA_CONTEXT' then return utils.format_json({version=1,source='lampa',entries={{url=stream,identity={
+                    title='Тёмная материя',original_title='Dark Matter',kind='tv',year=2024,tmdb_id=196322,season=2,episode=1,
+                }}}}) end
+                return getenv(key)
+            end
+            dofile(path('scripts/readable_titles.lua'))
+            local before=#requests
+            events['file-loaded']();tick()
+            local metadata=props['user-data/readable-title']
+            assert(metadata.display_name=='Тёмная материя' and metadata.tmdb_id==196322 and metadata.artwork,
+                'Lampa provides the title and logo identity for '..release.file)
+            local url=requests[before+1].args.args[#requests[before+1].args.args]
+            assert(url:find('/tv/196322?',1,true) and not url:find('/search/',1,true),'Fetch the selected series directly, without using the season release year as a premiere filter')
+            respond(before+1,{id=196322,name='Тёмная материя'})
+            assert(requests[before+2].args.args[#requests[before+2].args.args]:find('/tv/196322/season/2?',1,true),'Fetch the selected season')
+            respond(before+2,{episodes={{episode_number=1,name='Тихая жизнь'}}})
+            metadata=props['user-data/readable-title']
+            assert(metadata.artwork_id==196322 and metadata.kind=='tv' and metadata.tmdb_season==2
+                and metadata.subtitle=='Сезон 2, серия 1: Тихая жизнь','Keep logo and episode metadata scoped to the same series')
+        end
     end,debug.traceback)
     mp,os.getenv=real,getenv;package.loaded['mp.options']=options
     assert(ok,err)
