@@ -1297,5 +1297,181 @@
   {
     "en": "Ambiguous MAL match: automatic skip timings were not applied",
     "ru": "Неоднозначное совпадение MAL: автоматические таймкоды не применены"
+  },
+  {
+    "en": "Off",
+    "ru": "Выключено"
+  },
+  {
+    "en": "Standard scaling",
+    "ru": "Обычное масштабирование"
+  },
+  {
+    "en": "Restore blurred lines",
+    "ru": "Восстановление размытых линий"
+  },
+  {
+    "en": "Soft line restoration",
+    "ru": "Мягкое восстановление линий"
+  },
+  {
+    "en": "Upscaling and denoising",
+    "ru": "Масштабирование и шумоподавление"
+  },
+  {
+    "en": "Anime4K quality",
+    "ru": "Качество Anime4K"
+  },
+  {
+    "en": "Fast",
+    "ru": "Быстрое"
+  },
+  {
+    "en": "Lower GPU load",
+    "ru": "Меньше нагрузка на видеокарту"
+  },
+  {
+    "en": "High",
+    "ru": "Высокое"
+  },
+  {
+    "en": "Higher GPU load",
+    "ru": "Выше нагрузка на видеокарту"
+  },
+  {
+    "en": "For anime. If playback stutters, use Fast quality or turn Anime4K off.",
+    "ru": "Для аниме. Если видео тормозит, выберите быстрое качество или выключите Anime4K."
+  },
+  {
+    "en": "Anime4K requires gpu or gpu-next video output.",
+    "ru": "Anime4K требует видеовывод gpu или gpu-next."
+  },
+  {
+    "en": "Anime4K files are missing. Reinstall the player.",
+    "ru": "Файлы Anime4K отсутствуют. Переустановите сборку."
+  },
+  {
+    "en": "Could not apply Anime4K.",
+    "ru": "Не удалось применить Anime4K."
+  },
+  {
+    "en": "Could not save Anime4K settings.",
+    "ru": "Не удалось сохранить настройки Anime4K."
+  },
+  {
+    "en": "Upscale",
+    "ru": "Апскейл"
+  },
+  {
+    "en": "For movies and series · NVIDIA RTX",
+    "ru": "Для фильмов и сериалов · NVIDIA RTX"
+  },
+  {
+    "en": "Preparing video output",
+    "ru": "Подготовка видеовывода"
+  },
+  {
+    "en": "Waiting for video",
+    "ru": "Ожидание видео"
+  },
+  {
+    "en": "After restarting the player",
+    "ru": "После перезапуска плеера"
+  },
+  {
+    "en": "No upscaling needed",
+    "ru": "Увеличение не требуется"
+  },
+  {
+    "en": "Filter enabled",
+    "ru": "Фильтр включён"
+  },
+  {
+    "en": "Anime4K for anime. RTX VSR for movies and series; enable Super Resolution in NVIDIA settings. CTRL+0 to turn off.",
+    "ru": "Anime4K — для аниме. RTX VSR — для фильмов и сериалов; включите Super Resolution в настройках NVIDIA. CTRL+0 — выключить."
+  },
+  {
+    "en": "Could not save upscaler settings.",
+    "ru": "Не удалось сохранить настройки апскейла."
+  },
+  {
+    "en": "Could not configure RTX VSR video output.",
+    "ru": "Не удалось настроить видеовывод RTX VSR."
+  },
+  {
+    "en": "Could not enable the RTX VSR filter.",
+    "ru": "Не удалось включить фильтр RTX VSR."
+  },
+  {
+    "en": "RTX VSR is available only on Windows with an NVIDIA RTX GPU.",
+    "ru": "RTX VSR доступен только в Windows с видеокартой NVIDIA RTX."
+  },
+  {
+    "en": "RTX VSR will take effect after restarting the player. Current playback continues.",
+    "ru": "RTX VSR включится после перезапуска плеера. Текущий просмотр продолжается."
+  },
+  {
+    "en": "The driver could not enable RTX VSR. Check your GPU and NVIDIA settings.",
+    "ru": "Драйвер не включил RTX VSR. Проверьте видеокарту и настройки NVIDIA."
+  },
+  {
+    "en": "Image enhancement",
+    "ru": "Улучшение изображения"
+  },
+  {
+    "en": "No enhancement",
+    "ru": "Без улучшений"
+  },
+  {
+    "en": "Clear lines",
+    "ru": "Чёткие линии"
+  },
+  {
+    "en": "Soft lines",
+    "ru": "Мягкие линии"
+  },
+  {
+    "en": "Noise reduction",
+    "ru": "Уменьшение шума"
+  },
+  {
+    "en": "Standard",
+    "ru": "Стандартное"
+  },
+  {
+    "en": "Lower GPU load",
+    "ru": "Ниже нагрузка"
+  },
+  {
+    "en": "Higher GPU load",
+    "ru": "Выше нагрузка"
+  },
+  {
+    "en": "Movies and series",
+    "ru": "Фильмы и сериалы"
+  },
+  {
+    "en": "Preparing",
+    "ru": "Подготовка"
+  },
+  {
+    "en": "After restart",
+    "ru": "После перезапуска"
+  },
+  {
+    "en": "Not needed",
+    "ru": "Не требуется"
+  },
+  {
+    "en": "Could not save image enhancement settings.",
+    "ru": "Не удалось сохранить настройки улучшения изображения."
+  },
+  {
+    "en": "Clear lines restore detail, Soft lines apply gentler processing, Noise reduction cleans the image. CTRL+1 / CTRL+2 / CTRL+3.",
+    "ru": "Чёткие линии — восстановление, мягкие линии — деликатная обработка, уменьшение шума — очистка изображения. CTRL+1 / CTRL+2 / CTRL+3."
+  },
+  {
+    "en": "Anime uses Anime4K. Movies and series use RTX Video Super Resolution: enable Super Resolution in NVIDIA settings. CTRL+0 for no enhancement.",
+    "ru": "Аниме — Anime4K. Фильмы и сериалы — RTX Video Super Resolution: включите Super Resolution в настройках NVIDIA. CTRL+0 — без улучшений."
   }
 ]

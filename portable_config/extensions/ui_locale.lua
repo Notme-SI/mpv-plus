@@ -78,7 +78,7 @@ function M.chapter_text(value,language)
     return M.text(label or value,language)
 end
 local interface_menus={menu=true,keybinds=true,['player-timeline-style']=true,['player-icons']=true,
-    ['interface-language']=true,['picture-controls']=true,['language-defaults']=true,['audio-memory']=true,
+    ['interface-language']=true,['picture-controls']=true,anime4k=true,upscale=true,['language-defaults']=true,['audio-memory']=true,
     autocrop=true,['autocrop-settings']=true,theintrodb=true,['subtitle-memory']=true,['network-playback']=true,['player-controls']=true}
 function M.menu(data)
     local kind=data.type
@@ -106,6 +106,7 @@ function M.menu(data)
         if kind=='menu' then
             local binding=(type(node.value)=='table' and node.value[1]=='script-binding' and node.value[2])
                 or (type(node.value)=='string' and node.value:match('^script%-binding%s+(.+)$'))
+            if binding=='upscale/menu' then copy.title=M.text('Улучшение изображения') end
             if binding=='player_ui/controls_menu' then copy.title=M.text('Панель плеера') end
         end
         if node.items then
@@ -129,6 +130,13 @@ function M.menu(data)
             if type(node.value)=='string' and node.value=='script-binding '..binding then return true end
             for _,item in ipairs(node.items or {}) do if has(item,binding) then return true end end
             return false
+        end
+        if not has(result,'upscale/menu') then
+            local position=#result.items+1
+            for i,item in ipairs(result.items) do
+                if has(item,'picture_controls/menu') then position=i+1;break end
+            end
+            table.insert(result.items,position,{title=M.text('Улучшение изображения'),value={'script-binding','upscale/menu'}})
         end
         if not has(result,'subtitle_memory/menu') then
             local target

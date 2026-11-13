@@ -13,6 +13,7 @@ if settings.directory()~=mp.command_native({'expand-path','~~/'}) then
     if f then local saved=f:read('*a'):match('auto%s*=%s*(%w+)');f:close();if saved then options.auto=saved~='no' end end
 end
 local enabled, manual_scan, candidate_crop = false, false, nil
+local applied_crop, applied_geometry, applied_output
 local detect_crop
 -- Count decoded playback time, not wall time: pause/cache/seek cannot consume
 -- the sampling interval before cropdetect has seen enough frames.
@@ -23,7 +24,8 @@ local function playback_timeout(seconds, callback)
     timer = mp.add_periodic_timer(0.1, function()
         local now = mp.get_property_number('time-pos')
         if now and previous and not mp.get_property_bool('pause')
-            and not mp.get_property_bool('paused-for-cache') then
+            and not mp.get_property_bool('paused-for-cache')
+            and not mp.get_property_bool('seeking') then
             local delta = now - previous
             if delta > 0 and delta <= 1 then elapsed = elapsed + delta end
         end
@@ -45,31 +47,69 @@ local function schedule_next_scan(delay)
     end)
 end
 
+local function crop_geometry(meta, output)
+    local sx, sy = output.w / meta.max_w, output.h / meta.max_h
+    local function pixel(value) return math.floor(value + 0.5) end
+    local left, top = pixel(meta.x * sx), pixel(meta.y * sy)
+    local right, bottom = pixel((meta.x + meta.w) * sx), pixel((meta.y + meta.h) * sy)
+    return string.format('%dx%d+%d+%d', right - left, bottom - top, left, top)
+end
+
+local function set_crop(meta, output)
+    local geometry = meta and crop_geometry(meta, output) or ''
+    applied_crop, applied_geometry, applied_output = meta, geometry, output
+    if geometry ~= mp.get_property('video-crop', '') then
+        mp.commandv('no-osd', 'set', 'file-local-options/video-crop', geometry)
+    end
+end
+
+-- cropdetect samples before video filters. The VO takes coordinates in
+-- filtered pixels, so keep the source bounds when RTX VSR changes scale.
+mp.observe_property('video-out-params', 'native', function(_, output)
+    if not applied_crop or not output or not output.w or not output.h then return end
+    if output.w == applied_output.w and output.h == applied_output.h then return end
+    local current = mp.get_property('video-crop', '')
+    -- mpv can clear a crop that no longer fits the resized filter output.
+    if current ~= applied_geometry and current ~= '' then return end
+    if applied_crop.max_w ~= mp.get_property_number('width')
+        or applied_crop.max_h ~= mp.get_property_number('height') then return end
+    set_crop(applied_crop, output)
+end)
+
 local function apply_crop(meta)
+    local horizontal_valid = meta.w >= meta.min_w
+        and math.abs(meta.x - (meta.max_w - meta.w) / 2) <= math.max(4, meta.max_w * 0.015)
+    local vertical_valid = meta.h >= meta.min_h
+        and math.abs(meta.y - (meta.max_h - meta.h) / 2) <= math.max(4, meta.max_h * 0.015)
+    if not horizontal_valid or not vertical_valid then
+        -- Dark scenery can hide a side edge while both letterbox edges are
+        -- stable. Confirm those independently without cutting into the sides.
+        if vertical_valid and meta.h < meta.max_h and meta.w >= meta.min_w then
+            meta.x, meta.w = 0, meta.max_w
+        else
+            candidate_crop = nil
+            return false
+        end
+    end
     local effective = meta.x > 0 or meta.y > 0
         or meta.w < meta.max_w or meta.h < meta.max_h
-    local desired = effective and string.format('%dx%d+%d+%d',
-        meta.w, meta.h, meta.x, meta.y) or ''
+    local output = mp.get_property_native('video-out-params')
+    if not output or not output.w or not output.h then output = {w = meta.max_w, h = meta.max_h} end
+    local desired = effective and crop_geometry(meta, output) or ''
 
-    -- Reject over-cropping and strongly asymmetric dark scene boundaries.
-    local centered = math.abs(meta.x - (meta.max_w - meta.w) / 2) <= math.max(4, meta.max_w * 0.015)
-        and math.abs(meta.y - (meta.max_h - meta.h) / 2) <= math.max(4, meta.max_h * 0.015)
-    if effective and (meta.w < meta.min_w or meta.h < meta.min_h or not centered) then
-        candidate_crop = nil
-        return false
-    end
     if desired == mp.get_property('video-crop', '') then
         candidate_crop = nil
         return false
     end
     -- Require two independent samples before changing automatic framing.
     -- Invalid/dark samples retain the last known good crop.
-    if not manual_scan and desired ~= candidate_crop then
-        candidate_crop = desired
+    local source_geometry = effective and crop_geometry(meta, {w = meta.max_w, h = meta.max_h}) or ''
+    if not manual_scan and source_geometry ~= candidate_crop then
+        candidate_crop = source_geometry
         return true
     end
     candidate_crop = nil
-    mp.commandv('no-osd', 'set', 'file-local-options/video-crop', desired)
+    set_crop(effective and meta or nil, output)
     if manual_scan then
         mp.osd_message(effective and 'Полосы обрезаны' or 'Полосы не обнаружены', 2)
     end
@@ -234,7 +274,7 @@ local function toggle_auto()
         if options.auto_fill then mp.set_property_number('panscan', 1) end
         if not mp.get_property_bool('idle-active') then schedule_next_scan(0.1) end
     else
-        mp.set_property('file-local-options/video-crop', '')
+        set_crop(nil)
     end
     publish_state()
     local message = options.auto and 'Автообрезка включена' or 'Автообрезка выключена'
@@ -261,9 +301,19 @@ mp.register_event('end-file', function()
     cleanup()
     enabled = false
     candidate_crop = nil
+    applied_crop, applied_geometry, applied_output = nil, nil, nil
     publish_state()
 end)
 mp.register_event('file-loaded', on_start)
+mp.register_event('seek', function()
+    if not enabled or not options.auto then return end
+    -- A cropdetect window must never mix frames from opposite sides of a
+    -- manual seek or an automatic intro skip. Keep framing until rechecked.
+    cleanup()
+    manual_scan = false
+    candidate_crop = nil
+    schedule_next_scan(0.35)
+end)
 publish_state()
 
 -- Explicit framing choices suspend automatic scans only for the current file.
@@ -275,7 +325,7 @@ local function stop_auto()
 end
 mp.add_key_binding(nil, 'reset', function()
     stop_auto()
-    mp.set_property('file-local-options/video-crop', '')
+    set_crop(nil)
     reset_scale()
     mp.osd_message('Исходный кадр и масштаб - до следующего видео', 2)
 end)

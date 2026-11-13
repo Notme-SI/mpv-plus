@@ -139,7 +139,7 @@ return function(extend)
             local box={ax=cx-r,ay=cy-r,bx=cx+r,by=cy+r}
             local grouped=self.anchor_id=='controls' and Elements:v('controls','player_layout')
             T.panel(ass,box,visibility,r,hover)
-            if self.active then ass:circle(cx,cy,r,{color='ffffff',border=.7*s,border_color='ffffff',opacity={main=0,border=.55*visibility}}) end
+            if self.active then glass.rim(ass,{x0=box.ax,y0=box.ay,x1=box.bx,y1=box.by},s,.55*visibility,r) end
             if hover and self.tooltip then
                 local now=mp.get_time()
                 if self.hint_icon~=self.icon or now>=(self.hint_until or 0) then
@@ -308,6 +308,16 @@ return function(extend)
         end
     end)
     function T.menu(Menu)
+        local activate_item=Menu.activate_selected_item
+        function Menu:activate_selected_item(shortcut,is_pointer)
+            local item=self.current.items[self.current.selected_index]
+            if not item or not item.items then return activate_item(self,shortcut,is_pointer) end
+            if not self.mouse_nav then self:select_index(1,item.id) end
+            self:activate_menu(item.id)
+        end
+        function Menu:slide_in_menu(id)
+            self:activate_menu(id)
+        end
         local render=Menu.render
         function Menu:render()
             local factory=assdraw.ass_new

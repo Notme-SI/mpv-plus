@@ -1,4 +1,4 @@
-﻿#define AppVersion "1.2.4"
+﻿#define AppVersion "1.3.0"
 
 [Setup]
 AppId={{55794CC2-4BF5-4D67-BF18-AF9DFA0539D3}
@@ -58,6 +58,9 @@ Name: "desktopicon"; Description: "{cm:DesktopShortcut}"; Flags: unchecked
 #include "files.iss"
 
 [InstallDelete]
+Type: files; Name: "{app}\portable_config\shaders\artcnn\ArtCNN_C4F16.glsl"
+Type: files; Name: "{app}\portable_config\shaders\artcnn\ArtCNN_C4F32.glsl"
+Type: files; Name: "{app}\LICENSES\ArtCNN-LICENSE.txt"
 Type: files; Name: "{app}\Обновить mpv+.cmd"
 Type: files; Name: "{app}\Обновить MPV.cmd"
 Type: files; Name: "{app}\Настроить TorrServer.cmd"

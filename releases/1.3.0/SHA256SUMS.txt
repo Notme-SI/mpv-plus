@@ -1,0 +1,2 @@
+50709a0c7dc6f1cce2d06713ad0cd0559bcf571405a919c6edcf43ba970eadbd  mpv+-1.3.0-Setup.exe
+fc18c4719f70df60383118be383b4f5905dd2bb0ab6f81d108bdfcd8ec3bcb71  mpv+-1.3.0.zip

@@ -3,3 +3,5 @@
 * whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 *.png binary
 *.ico binary
+# Preserve the exact official Anime4K archive bytes, including its whitespace.
+portable_config/shaders/anime4k/*.glsl whitespace=-blank-at-eol

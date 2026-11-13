@@ -31,6 +31,9 @@ local function tests()
     contains('scripts/uosc/elements/Button.lua','function Button:handle_cursor_click()')
     contains('scripts/uosc/lib/menus.lua','function create_self_updating_menu_opener(opts)')
     dofile(path('maintenance/ui-tests.lua'))(path)
+    dofile(path('maintenance/anime4k-tests.lua'))(path)
+    dofile(path('maintenance/rtx-vsr-tests.lua'))(path)
+    dofile(path('maintenance/keyboard-seek-tests.lua'))(path)
     dofile(path('maintenance/ontop-tests.lua'))(path)
     dofile(path('maintenance/interface-tests.lua'))(path)
     dofile(path('maintenance/maintenance-menu-tests.lua'))(path)
@@ -90,7 +93,10 @@ local function tests()
         commandv=function(a,b,c,d)
             if a=='no-osd' and b=='set' then set(c,d) end
         end,
-        observe_property=function(k,_,fn) if k=='track-list/count' then hooks.read=fn end end,
+        observe_property=function(k,_,fn)
+            if k=='track-list/count' then hooks.read=fn end
+            if k=='video-out-params' then hooks.output=fn end
+        end,
         unobserve_property=noop,osd_message=noop,
         add_hook=function(name,priority,fn) hooks[name..priority]=fn end,
         register_event=function(name,fn) events[name]=fn end,
@@ -161,6 +167,22 @@ local function tests()
     tick(3,false); assert(props['video-crop']=='1920x800+0+140','invalid sample retains crop')
     props['vf-metadata/autocrop-cropdetect']={['lavfi.cropdetect.w']='1920',['lavfi.cropdetect.h']='1080',['lavfi.cropdetect.x']='0',['lavfi.cropdetect.y']='0'}
     tick(3,false); assert(props['video-crop']=='','full frame restored')
+    props['vf-metadata/autocrop-cropdetect']={['lavfi.cropdetect.w']='1920',['lavfi.cropdetect.h']='800',['lavfi.cropdetect.x']='0',['lavfi.cropdetect.y']='140'}
+    events.seek();props['time-pos']=100;props.seeking=true
+    tick(2,false);assert(props['video-crop']=='','Seeking does not consume a fresh sampling window')
+    props.seeking=false;tick(2,false)
+    assert(props['video-crop']=='1920x800+0+140','Recheck cropping after a startup skip or keyboard seek')
+    props['video-out-params']={w=2560,h=1440};hooks.output(nil,props['video-out-params'])
+    assert(props['video-crop']=='2560x1066+0+187','Crop edges follow RTX VSR output dimensions')
+    props['video-crop']='' -- mpv clears an out-of-bounds crop during VO reconfiguration.
+    props['video-out-params']={w=1920,h=1080};hooks.output(nil,props['video-out-params'])
+    assert(props['video-crop']=='1920x800+0+140','Crop returns to original coordinates with RTX VSR off')
+    props['vf-metadata/autocrop-cropdetect']={['lavfi.cropdetect.w']='1266',['lavfi.cropdetect.h']='960',['lavfi.cropdetect.x']='546',['lavfi.cropdetect.y']='60'}
+    events.seek();tick(2,false)
+    assert(props['video-crop']=='1920x960+0+60','Confirmed top and bottom bars can be removed despite a dark side edge')
+    props['vf-metadata/autocrop-cropdetect']={['lavfi.cropdetect.w']='400',['lavfi.cropdetect.h']='640',['lavfi.cropdetect.x']='780',['lavfi.cropdetect.y']='220'}
+    events.seek();tick(2,false)
+    assert(props['video-crop']=='1920x960+0+60','Keep the last crop when too little of the picture is visible')
     bindings.fit(); assert(props['user-data/autocrop/active']==false,'manual framing suspends scanning')
     events['file-loaded'](); assert(props['user-data/autocrop/active']==true,'new file resumes automatic scanning')
     events['end-file']()

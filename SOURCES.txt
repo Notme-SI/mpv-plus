@@ -84,3 +84,14 @@ https://github.com/Anime-Lists/anime-lists
 https://shikimori.one/api/doc (localized title lookup)
 The derived catalog is distributed as portable_config/data/anime-catalog.json.
 Rebuild using tools/build-anime-catalog.py with downloaded source snapshots.
+
+Anime4K v4.0.1: https://github.com/bloc97/Anime4K
+Commit: 4029bf701ecaa15f163cdc49cffe5501c1acf410
+Archive: https://github.com/bloc97/Anime4K/releases/download/v4.0.1/Anime4K_v4.0.zip
+Archive SHA-256: 139cd282086457c5adc79caf7b75b8b825091d71c9b54958c18745fea62d7ed7
+12 unmodified GLSL files, MIT license (LICENSES/Anime4K-LICENSE.txt).
+
+RTX Video Super Resolution uses the native d3d11vpp filter in the pinned mpv binary.
+No NVIDIA SDK, external model or proprietary runtime is bundled.
+Filter source: https://github.com/mpv-player/mpv/blob/8bc468896e/video/filter/vf_d3d11vpp.c
+Driver processing: https://developer.nvidia.com/rtx-video-sdk
