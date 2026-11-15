@@ -5,7 +5,14 @@ local utils = require 'mp.utils'
 local config_path = dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua').path('script-opts/uosc.conf')
 local style, cache = 'bar', true
 local default_mark_color='#D8C39A'
-local prefs={icon_style='glass',chapter_marks=true,skip_mark_color=default_mark_color,controls_always=false,buffer_visible=false,statistics_visible=false}
+local sizes={75,90,100,115,130,150}
+local prefs={icon_style='glass',chapter_marks=true,skip_mark_color=default_mark_color,controls_always=false,buffer_visible=false,statistics_visible=false,interface_size=100}
+local function interface_size(value)
+    local percent=tonumber(value)
+    for _,size in ipairs(sizes) do
+        if percent==size then return size end
+    end
+end
 local function mark_color(value)
     local rgb=type(value)=='string' and value:match('^%s*#?(%x%x%x%x%x%x)%s*$')
     return rgb and '#'..rgb:upper() or nil
@@ -13,13 +20,15 @@ end
 dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua').options(prefs,'player_ui')
 if prefs.icon_style~='plain' then prefs.icon_style='glass' end
 prefs.skip_mark_color=mark_color(prefs.skip_mark_color) or default_mark_color
+prefs.interface_size=interface_size(prefs.interface_size) or 100
 local prefs_path=dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua').path('script-opts/player_ui.conf')
 local function save_prefs()
     local f=io.open(prefs_path,'wb')
     if not f then mp.osd_message('Не удалось сохранить оформление',3);return end
     local ok=f:write('icon_style='..prefs.icon_style..'\nchapter_marks='..(prefs.chapter_marks and 'yes' or 'no')
         ..'\nskip_mark_color='..prefs.skip_mark_color..'\ncontrols_always='..(prefs.controls_always and 'yes' or 'no')
-        ..'\nbuffer_visible='..(prefs.buffer_visible and 'yes' or 'no')..'\nstatistics_visible='..(prefs.statistics_visible and 'yes' or 'no')..'\n')
+        ..'\nbuffer_visible='..(prefs.buffer_visible and 'yes' or 'no')..'\nstatistics_visible='..(prefs.statistics_visible and 'yes' or 'no')
+        ..'\ninterface_size='..prefs.interface_size..'\n')
     if not f:close() or not ok then mp.osd_message('Не удалось сохранить оформление',3) end
 end
 local function icons_menu()
@@ -81,6 +90,14 @@ local function controls_menu()
          icon=prefs.statistics_visible and 'toggle_on' or 'toggle_off',value={'script-binding','player_ui/toggle_statistics'}},
     }}
 end
+local function size_menu()
+    local items={}
+    for _,size in ipairs(sizes) do
+        items[#items+1]={title=size..'%',hint=size==100 and 'По умолчанию' or nil,
+            active=size==prefs.interface_size,value={'script-message-to','player_ui','interface-size',tostring(size)}}
+    end
+    return {type='player-interface-size',title='Размер интерфейса',keep_open=true,items=items}
+end
 local function publish()
     mp.set_property_native('user-data/player-ui/timeline-style', style)
     mp.set_property_native('user-data/player-ui/timeline-cache', cache)
@@ -90,10 +107,22 @@ local function publish()
     mp.set_property_native('user-data/player-ui/controls-always',prefs.controls_always)
     mp.set_property_native('user-data/player-ui/buffer-visible',prefs.buffer_visible)
     mp.set_property_native('user-data/player-ui/statistics-visible',prefs.statistics_visible)
+    mp.set_property_native('user-data/player-ui/interface-scale',prefs.interface_size/100)
     mp.commandv('script-message-to', 'uosc', 'update-menu', utils.format_json(menu_data()))
     mp.commandv('script-message-to','uosc','update-menu',utils.format_json(icons_menu()))
     mp.commandv('script-message-to','uosc','update-menu',utils.format_json(controls_menu()))
 end
+mp.add_key_binding(nil,'size_menu',function()
+    mp.commandv('script-message-to','uosc','open-menu',utils.format_json(size_menu()))
+end)
+mp.register_script_message('interface-size',function(value)
+    local size=interface_size(value)
+    if not size or size==prefs.interface_size then return end
+    prefs.interface_size=size
+    save_prefs()
+    mp.set_property_native('user-data/player-ui/interface-scale',size/100)
+    mp.commandv('script-message-to','uosc','update-menu',utils.format_json(size_menu()))
+end)
 local function save_option(key, value)
     local source = '\n' .. read_config()
     local changed, count = source:gsub('\n' .. key .. '%s*=[^\n]*', '\n' .. key .. '=' .. value)

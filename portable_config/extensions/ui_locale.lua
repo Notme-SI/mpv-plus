@@ -138,6 +138,10 @@ function M.menu(data)
             end
             table.insert(result.items,position,{title=M.text('Улучшение изображения'),value={'script-binding','upscale/menu'}})
         end
+        if not has(result,'continue_watching/menu') then
+            table.insert(result.items,1,{title=M.text('Продолжить просмотр'),icon='history',
+                value={'script-binding','continue_watching/menu'}})
+        end
         if not has(result,'subtitle_memory/menu') then
             local target
             for _,item in ipairs(result.items) do
@@ -149,11 +153,18 @@ function M.menu(data)
         if not has(result,'network_playback/menu') then
             table.insert(result.items,math.max(1,#result.items),{title=M.text('Сеть и буфер'),value={'script-binding','network_playback/menu'}})
         end
-        if not has(result,'player_ui/controls_menu') then
+        local add_controls=not has(result,'player_ui/controls_menu')
+        local add_size=not has(result,'player_ui/size_menu')
+        if add_controls or add_size then
             local target
             for _,item in ipairs(result.items)do if item.items and item.title==M.text('Интерфейс')then target=item;break end end
             if not target then target={title=M.text('Интерфейс'),items={}};result.items[#result.items+1]=target end
-            target.items[#target.items+1]={title=M.text('Панель плеера'),value={'script-binding','player_ui/controls_menu'}}
+            if add_controls then
+                target.items[#target.items+1]={title=M.text('Панель плеера'),value={'script-binding','player_ui/controls_menu'}}
+            end
+            if add_size then
+                table.insert(target.items,1,{title=M.text('Размер интерфейса'),value={'script-binding','player_ui/size_menu'}})
+            end
         end
         if not has(result,'player_maintenance/menu') then
             table.insert(result.items,math.max(1,#result.items),{title=M.language()=='en' and 'Maintenance' or 'Обслуживание',value={'script-binding','player_maintenance/menu'}})

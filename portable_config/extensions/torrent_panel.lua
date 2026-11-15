@@ -29,7 +29,7 @@ end
 function M.render(data,language,w,h,playback)
     local ass=require('mp.assdraw').ass_new()
     local en=language=='en'
-    local scale=math.max(0.8,math.min(2.1,h/720))
+    local scale=math.max(0.8,math.min(2.1,h/720))*(playback and playback.interface_scale or 1)
     local width=math.min(440*scale,w-20*scale)
     local x,y=w-width-10*scale,10*scale
     local height=(data.extra~='' and 218 or 190)*scale
@@ -101,6 +101,7 @@ function M.new(ui)
         overlay.res_x=w;overlay.res_y=h
         overlay.data=M.render(value,ui.language(),w,h,{
             icon_style=mp.get_property_native('user-data/player-ui/icon-style','glass'),
+            interface_scale=mp.get_property_native('user-data/player-ui/interface-scale',1),
             seconds=mp.get_property_number('demuxer-cache-duration'),
             speed=mp.get_property_number('cache-speed'),
         });overlay:update()
@@ -108,6 +109,7 @@ function M.new(ui)
     mp.observe_property('osd-dimensions','native',draw)
     mp.observe_property('user-data/interface-language','native',draw)
     mp.observe_property('user-data/player-ui/icon-style','native',draw)
+    mp.observe_property('user-data/player-ui/interface-scale','number',draw)
     mp.observe_property('user-data/network-buffering','native',draw)
     mp.register_event('end-file',hide)
     mp.register_event('shutdown',hide)

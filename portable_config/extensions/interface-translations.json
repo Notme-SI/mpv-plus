@@ -1,5 +1,21 @@
 [
   {
+    "en": "Interface size",
+    "ru": "Размер интерфейса"
+  },
+  {
+    "en": "Continue watching",
+    "ru": "Продолжить просмотр"
+  },
+  {
+    "en": "No saved positions",
+    "ru": "Нет сохранённых позиций"
+  },
+  {
+    "en": "Online video",
+    "ru": "Онлайн-видео"
+  },
+  {
     "en": "Aspect ratio",
     "ru": "Соотношение сторон"
   },
@@ -776,7 +792,7 @@
   },
   {
     "en": "Drop files or URLs to play here",
-    "ru": "Перетащите сюда файл или ссылку"
+    "ru": "Перетащите файл или ссылку"
   },
   {
     "en": "Reload",
@@ -1001,6 +1017,14 @@
   {
     "ru": "Ошибка подключения",
     "en": "Connection failed"
+  },
+  {
+    "ru": "Не удалось открыть следующий поток",
+    "en": "Could not open the next stream"
+  },
+  {
+    "ru": "Повторить открытие",
+    "en": "Retry opening"
   },
   {
     "ru": "Открытие потока",

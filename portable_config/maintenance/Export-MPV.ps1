@@ -14,7 +14,7 @@ Get-ChildItem -LiteralPath $player -File -Recurse -Force | ForEach-Object {
 if($SettingsDirectory -and (Test-Path -LiteralPath $SettingsDirectory)) {
     Get-ChildItem -LiteralPath $SettingsDirectory -File -Recurse | ForEach-Object {
         $rel=$_.FullName.Substring($SettingsDirectory.TrimEnd('\').Length+1)
-        $files['portable_config\'+$rel]=$_.FullName
+        if($rel -notmatch '(^|\\)(watch_later|watch_history)(\\|$)') {$files['portable_config\'+$rel]=$_.FullName}
     }
 }
 Add-Type -AssemblyName System.IO.Compression

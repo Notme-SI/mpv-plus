@@ -34,7 +34,7 @@ draw=function()
         mp.set_property_native('user-data/skip-prompt-ready',{})
         return
     end
-    local scale=math.max(0.65,math.min(2,h/720))
+    local scale=math.max(0.65,math.min(2,h/720))*mp.get_property_native('user-data/player-ui/interface-scale',1)
     local ass=assdraw.ass_new()
     local function render(data,y,clickable)
         local auto=data.auto or data.notice
@@ -109,5 +109,6 @@ mp.observe_property('seeking','bool',function() start_notice_timer();draw() end)
 mp.observe_property('paused-for-cache','bool',function() start_notice_timer();draw() end)
 mp.register_event('playback-restart',function() start_notice_timer();draw() end)
 mp.observe_property('user-data/skip-transition','native',function()start_notice_timer();draw()end)
-for _,name in ipairs({'time-pos','osd-dimensions','mouse-pos','user-data/mpv/console/open','user-data/interface-language','user-data/player-ui/icon-style'}) do mp.observe_property(name,'native',draw) end
+for _,name in ipairs({'time-pos','osd-dimensions','mouse-pos','user-data/mpv/console/open','user-data/interface-language',
+    'user-data/player-ui/icon-style','user-data/player-ui/interface-scale'}) do mp.observe_property(name,'native',draw) end
 mp.register_event('end-file',function() if notice_timer then notice_timer:kill();notice_timer=nil end;cue=nil;notice=nil;draw() end)

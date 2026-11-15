@@ -12,7 +12,7 @@ local function version()
             if value then return value end
         end
     end
-    return '1.3.0'
+    return '1.3.1'
 end
 local function show()
     local items={

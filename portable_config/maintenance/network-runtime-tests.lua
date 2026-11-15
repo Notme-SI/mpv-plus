@@ -91,6 +91,36 @@ return function(path)
         props['core-idle']=false;props['user-data/torrserver-loading']={};observers['user-data/torrserver-loading']();assert(not overlay.visible)
         emit('end-file',{playlist_entry_id=2,reason='stop'})
         props.path='C:/movie.mkv';props['file-local-options/cache-secs']=17;emit('start-file',{playlist_entry_id=3});hooks.on_load();assert(props['file-local-options/cache-secs']==17,'Local-file options stay untouched')
+
+        bindings.toggle()
+        props.idle,props['force-window']='no','immediate'
+        props.playlist={{id=11,filename='https://media.invalid/five'},{id=12,filename='https://media.invalid/six'}}
+        props['playlist-count']=2
+        props.path=props.playlist[2].filename;props['playlist-pos']=1
+        emit('start-file',{playlist_entry_id=12})
+        emit('end-file',{playlist_entry_id=12,reason='error'})
+        assert(props.idle=='no','An initial open error retains the normal exit behavior')
+
+        for _,reason in ipairs({'eof','stop'}) do
+            props.path=props.playlist[1].filename;props['playlist-pos']=0
+            emit('start-file',{playlist_entry_id=11});emit('file-loaded')
+            props['time-pos']=reason=='eof' and 1399 or 1350
+            if reason=='stop' then props['user-data/skip-finish']={path=props.path,id=11} end
+            hooks.on_unload();emit('end-file',{playlist_entry_id=11,reason=reason})
+            props.path=props.playlist[2].filename;props['playlist-pos']=1
+            emit('start-file',{playlist_entry_id=12})
+            emit('end-file',{playlist_entry_id=12,reason='error'})
+            assert(props.idle=='yes' and props['user-data/network-playback'].state=='failed','Keep the window after the next stream fails to open')
+            observers['idle-active']('idle-active',true)
+            local menu=utils.parse_json(commands[#commands][4])
+            assert(menu.type=='network-open-error' and menu.items[1].value[3]=='retry-failed','The failure menu offers a retry')
+            props['playlist-pos']=-1
+            messages['retry-failed']()
+            local retry=commands[#commands]
+            assert(retry[1]=='playlist-play-index' and retry[2]==1,'Retry the failed entry even when idle has cleared the playlist position')
+            emit('start-file',{playlist_entry_id=12});emit('file-loaded')
+            assert(props.idle=='no' and props['force-window']=='immediate','Resuming playback restores the original window options')
+        end
     end,debug.traceback)
     mp=real;io.open=open;for key,value in pairs(saved)do package.loaded[key]=value end;assert(ok,err)
 

@@ -10,6 +10,13 @@ return function(script_directory)
     local legacy='play-pause?Пауза/Воспроизвести,menu,command:cloud:script-binding torrserver_loader/torr_open?TorrServer,subtitles,audio,button:theintrodb,space,speed:0.9,space,prev,playlist,next,toggle:push_pin:ontop?Поверх всех окон,fullscreen'
     local function player_layout() return options.controls==preset or options.controls==previous or options.controls==legacy end
     local function controls_height() return round((options.controls_size+2)*state.scale) end
+    local theme
+    local function play_radius()
+        return math.min(30*state.scale,math.min(display.width,display.height)*.09)
+    end
+    local function idle_play_y(radius)
+        return display.height/2-radius*.5
+    end
     package.preload['lib/utils']=function()
         local original=assert(loadfile(script_directory..'/lib/utils.lua'))()
         local format_key=keybind_to_human
@@ -34,7 +41,26 @@ return function(script_directory)
         local original=assert(loadfile(script_directory..'/lib/ass.lua'))()
         local methods=getmetatable(assdraw.ass_new())
         local icon=methods.icon
+        local txt=methods.txt
+        local drop_hint='Drop files or URLs to play here'
+        function methods:txt(x,y,align,text,opts)
+            if state.is_idle and opts and opts.size and text==ui.text(drop_hint) then
+                local size=opts.size
+                opts.size=math.max(13*state.scale,math.min(24*state.scale,size*0.55))
+                local radius=play_radius()
+                y=idle_play_y(radius)+radius*.90+8*state.scale
+                if text==drop_hint then text='Drop a file or link' end
+            end
+            return txt(self,x,y,align,text,opts)
+        end
         function methods:icon(x,y,size,name,opts)
+            if name=='not_started' and state.is_idle then
+                local radius=play_radius()
+                if radius<=0 then return end
+                -- The circle in this glyph occupies 20 of its 24 units.
+                local glyph_size=2*(radius*.90)*24/20
+                return icon(self,x,idle_play_y(radius),glyph_size,name,opts)
+            end
             if name=='subtitles' then
                 opts=opts or {}
                 return surface.caption(self,x,y,size,opts.color or 'ffffff',opts.opacity or 1,opts.clip)
@@ -184,7 +210,6 @@ return function(script_directory)
             return persistent(self)
         end
     end)
-    local theme
     extend('Controls',function(Controls)
         local init_options=Controls.init_options
         local dimensions=Controls.update_dimensions
@@ -268,8 +293,7 @@ return function(script_directory)
             if state.is_idle or not state.is_video or state.core_idle and not state.pause or seeking
                 or state.cache_underrun or state.cache_buffering and state.cache_buffering<100
                 or Elements:v('timeline','pressed') or Elements.curtain.opacity>0 then return end
-            local s=state.scale
-            local radius=math.min(30*s,math.min(display.width,display.height)*.09)
+            local radius=play_radius()
             if radius<=0 then return end
             local x,y=display.width/2,display.height/2
             local step=radius*1.95

@@ -10,6 +10,7 @@ dofile(mp.command_native({'expand-path','~~/'})..'/extensions/user_settings.lua'
 local profiles={auto=true,normal=true,large=true}
 if profiles[opts.buffer]==nil then opts.buffer='auto' end
 local session,pending,restarting,held,timer
+local failed_entry
 local diagnostics=false
 local stat,request,request_generation={},nil,0
 local cache_profile
@@ -97,6 +98,23 @@ local function selected_id()
     local item=mp.get_property_native('playlist',{})[index+1]
     return item and item.id
 end
+local function clear_failed_entry()
+    if not failed_entry then return end
+    local previous=failed_entry
+    failed_entry=nil
+    mp.commandv('script-message-to','uosc','close-menu','network-open-error')
+    mp.set_property('idle',previous.idle)
+    if previous.force_window=='no' then mp.set_property('force-window','no') end
+end
+local function retain_failed_entry()
+    if not session.followup or session.loaded then return false end
+    local index=entry_index(session.id)
+    if not index or index+1~=mp.get_property_number('playlist-count',0) then return false end
+    failed_entry={id=session.id,idle=mp.get_property('idle','no'),force_window=mp.get_property('force-window','no')}
+    mp.set_property('idle','yes')
+    if failed_entry.force_window=='no' then mp.set_property('force-window','yes') end
+    return true
+end
 local function capture()
     if not session or not session.active then return end
     local time=mp.get_property_number('time-pos')
@@ -106,14 +124,18 @@ local function capture()
     session.pause=mp.get_property_bool('pause',false)
     session.intentional_end=mp.get_property('end','none')~='none' or mp.get_property('length','none')~='none'
     local ending=mp.get_property_native('user-data/skip-finish',{})
-    if ending.path==session.path and ending.id==session.id then session.intentional_end=true end
+    session.skipped_credits=ending.path==session.path and ending.id==session.id
+    if session.skipped_credits then session.intentional_end=true end
 end
 mp.register_event('start-file',function(event)
     local path=mp.get_property('path','')
     if restarting and restarting.id==event.playlist_entry_id then
         session=restarting;restarting=nil
     else
-        cancel();session={id=event.playlist_entry_id,path=path,time=0,tries=0,stable=0,loaded=false}
+        local id=event.playlist_entry_id
+        local followup=(failed_entry and failed_entry.id==id) or (session and session.next_id==id)
+        clear_failed_entry()
+        cancel();session={id=id,path=path,time=0,tries=0,stable=0,loaded=false,followup=followup}
         mp.set_property_native('user-data/skip-finish',{})
     end
     session.path=path;session.active=true
@@ -140,14 +162,27 @@ mp.add_periodic_timer(1,function()
 end)
 mp.add_hook('on_unload',90,capture)
 mp.register_event('end-file',function(event)
-    if not session then return end
+    if not session or session.id~=event.playlist_entry_id then return end
     session.active=false
     local limit=session.loaded and 5 or 2
-    if opts.reconnect and session.id==event.playlist_entry_id and policy.retry(session,event.reason) then
-        if session.tries<limit then
-            session.tries=session.tries+1;session.stable=0;pending=session;status('waiting')
-        else pending=nil;status('failed');mp.osd_message('Не удалось восстановить поток. Проверьте сеть или TorrServer.',5) end
-    else pending=nil;status('idle') end
+    local retryable=policy.retry(session,event.reason)
+    if opts.reconnect and retryable and session.tries<limit then
+        session.tries=session.tries+1;session.stable=0;pending=session;status('waiting')
+        return
+    end
+    pending=nil
+    if retryable and (retain_failed_entry() or opts.reconnect) then
+        status('failed')
+        mp.osd_message(ui.text(failed_entry and 'Не удалось открыть следующий поток'
+            or 'Не удалось восстановить поток. Проверьте сеть или TorrServer.'),5)
+    else
+        if session.loaded and not retryable and (event.reason=='eof' or session.skipped_credits) then
+            local index=entry_index(session.id)
+            local next_entry=index and mp.get_property_native('playlist',{})[index+2]
+            session.next_id=next_entry and next_entry.id
+        end
+        status('idle')
+    end
 end)
 mp.add_hook('on_after_end_file',50,function(hook)
     if not pending then return end
@@ -170,7 +205,21 @@ end)
 mp.observe_property('playlist-pos','number',function()
     if held and pending and selected_id()~=pending.id then cancel() end
 end)
-mp.observe_property('playlist','native',function() if pending and not entry_index(pending.id) then cancel() end end)
+mp.observe_property('playlist','native',function()
+    if pending and not entry_index(pending.id) then cancel() end
+    if failed_entry and not entry_index(failed_entry.id) then clear_failed_entry() end
+end)
+mp.observe_property('idle-active','bool',function(_,idle)
+    if not idle or not failed_entry then return end
+    mp.commandv('script-message-to','uosc','open-menu',utils.format_json({
+        type='network-open-error',title=ui.text('Не удалось открыть следующий поток'),
+        items={{title=ui.text('Повторить открытие'),value={'script-message-to','network_playback','retry-failed'}}},
+    }))
+end)
+mp.register_script_message('retry-failed',function()
+    local index=failed_entry and entry_index(failed_entry.id)
+    if index then mp.commandv('playlist-play-index',index,'yes') end
+end)
 mp.register_event('shutdown',function() cancel();if request then mp.abort_async_command(request) end end)
 mp.add_key_binding(nil,'cancel',function()cancel(true)end)
 local function stop_stat()
@@ -292,6 +341,7 @@ draw_buffering=function()
         display_fps=mp.get_property_number('display-fps'),
         torrent_context=context,
         icon_style=mp.get_property_native('user-data/player-ui/icon-style','glass'),
+        interface_scale=mp.get_property_native('user-data/player-ui/interface-scale',1),
         show_buffer=mp.get_property_native('user-data/player-ui/buffer-visible',false),
         show_statistics=mp.get_property_native('user-data/player-ui/statistics-visible',false)}
     mp.set_property_native('user-data/network-buffering',data)
@@ -343,7 +393,8 @@ for _,property in ipairs({'paused-for-cache','seeking','core-idle','cache-buffer
     mp.observe_property(property,'native',refresh_telemetry)
 end
 for _,property in ipairs({'osd-dimensions','user-data/player-ui/buffer-visible','user-data/player-ui/statistics-visible',
-    'user-data/interface-language','user-data/media-info','hwdec-current','display-fps','user-data/torrserver-context','user-data/player-ui/icon-style'}) do
+    'user-data/interface-language','user-data/media-info','hwdec-current','display-fps','user-data/torrserver-context','user-data/player-ui/icon-style',
+    'user-data/player-ui/interface-scale'}) do
     mp.observe_property(property,'native',function()draw_buffering()end)
 end
 mp.observe_property('demuxer-cache-state','native',function()

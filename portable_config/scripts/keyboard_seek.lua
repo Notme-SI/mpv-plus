@@ -23,7 +23,7 @@ local function render()
     if not origin or total == 0 then return end
     local w,h = mp.get_osd_size()
     if w <= 0 or h <= 0 then return end
-    local scale = math.max(0.6, math.min(3, h / 720))
+    local scale = math.max(0.6, math.min(3, h / 720)) * mp.get_property_native('user-data/player-ui/interface-scale', 1)
     local size, font = 20 * scale, 'Segoe UI'
     local label = string.format('%+d', total) .. (ui.language() == 'en' and ' s' or ' с')
     local width = math.min(measure.width(label, size, font, false) + 51 * scale, w - 16 * scale)
@@ -105,6 +105,7 @@ local function queue_refresh()
 end
 mp.observe_property('input-bindings', 'native', queue_refresh)
 mp.observe_property('user-data/player-ui/icon-style', 'string', render)
+mp.observe_property('user-data/player-ui/interface-scale', 'number', render)
 mp.observe_property('user-data/interface-language', 'string', render)
 mp.observe_property('osd-dimensions', 'native', render)
 mp.register_event('file-loaded', clear)

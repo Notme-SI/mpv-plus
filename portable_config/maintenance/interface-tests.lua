@@ -16,9 +16,10 @@ return function(path)
     ui.language=function() return 'en' end
     local command={'script-binding','picture_controls/menu'}
     local menu={type='menu',items={{title='Изображение',value=command},{title='TorrServer',value='noop'}}}
-    assert(ui.menu(menu).items[1].title=='Picture')
-    assert(menu.items[1].title=='Изображение' and ui.menu(menu).items[1].value==command,'Menu copy preserves commands')
     local updated=ui.menu(menu)
+    assert(updated.items[1].title=='Continue watching' and updated.items[1].value[2]=='continue_watching/menu')
+    assert(updated.items[2].title=='Picture')
+    assert(menu.items[1].title=='Изображение' and updated.items[2].value==command,'Menu copy preserves commands')
     assert(#ui.menu(updated).items==#updated.items,'Old menu migration must be idempotent')
     assert(#menu.items==2,'Personal menu source must not be mutated')
     assert(ui.menu({type='network-playback',items={{title='Запас видео'}}}).items[1].title=='Buffered video')
@@ -37,9 +38,9 @@ return function(path)
         {title='Найденные фрагменты',value={'script-binding','theintrodb/theintrodb-toggle-ui'}},
         {title='Ручной поиск',value={'script-binding','autochapters/search'}}}}}}
     local clean=ui.menu(old)
-    assert(clean.items[1].items==nil and #old.items[1].items==5,'Flatten the old submenu without rewriting personal settings')
-    assert(clean.items[1].value[2]=='theintrodb/theintrodb-toggle-ui','Open skip settings directly')
-    assert(ui.menu(clean).items[1].items==nil,'Menu migration is idempotent')
+    assert(clean.items[2].items==nil and #old.items[1].items==5,'Flatten the old submenu without rewriting personal settings')
+    assert(clean.items[2].value[2]=='theintrodb/theintrodb-toggle-ui','Open skip settings directly')
+    assert(ui.menu(clean).items[2].items==nil,'Menu migration is idempotent')
     local skip=ui.menu({type='theintrodb',items={{title='Auto'},{title='Manual',value={'script-binding','autochapters/search'}}}})
     assert(#skip.items==1,'Remove manual search from cached skip menus too')
     ui.language=language

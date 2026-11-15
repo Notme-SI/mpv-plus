@@ -20,8 +20,8 @@ function M.new(ui)
     end
     return {hide=function()overlay:remove()end,draw=function(data)
         local w,h=mp.get_osd_size()
-        if w<100 or h<100 or data.show_buffer==false and data.show_statistics==false then overlay:remove();return end
-        local en,scale=ui.language()=='en',math.max(.65,math.min(2,h/720))
+        if w<100 or h<100 or data.reason~='opening' and data.show_buffer==false and data.show_statistics==false then overlay:remove();return end
+        local en,scale=ui.language()=='en',math.max(.65,math.min(2,h/720))*(data.interface_scale or 1)
         local second,megabyte,speed=en and 's' or 'с',en and 'MiB' or 'МБ',en and 'Mbps' or 'Мбит/с'
         local font='Segoe UI Semibold'
         local ass=assdraw.ass_new()
@@ -95,7 +95,13 @@ function M.new(ui)
             text(header,x+39*scale,y+12*scale,18,width-52*scale)
             for i,item in ipairs(rows) do text(item,x+14*scale,y+(17+i*23)*scale,17,width-28*scale) end
         end
-        if data.show_buffer~=false then
+        if data.reason=='opening' then
+            local label=en and 'Opening stream…' or 'Открытие потока…'
+            local width=metrics.width(label,15*scale,font)+24*scale
+            local x,y=(w-width)/2,h/2+32*scale
+            box(x,y,width,26*scale,13*scale)
+            text(label,x+12*scale,y+4*scale,15,width-12*scale)
+        elseif data.show_buffer~=false then
             local download=transfer or read or rate(0)
             local label=download
             local width=math.min(w-16*scale,metrics.width(label,15*scale,font)+34*scale)
